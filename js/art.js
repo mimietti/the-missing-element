@@ -3,7 +3,7 @@ const ART = (function(){
   const C = {
     bg:'#F4F1EA', ink:'#2C3A41', mute:'#7C878A', line:'#D3D8D2', paper:'#F6F6F2',
     stone:'#7F8D92', stoneDark:'#6A787D',
-    earth:'#8A6A48', earthDark:'#6C5136', moss:'#7E9A57',
+    earth:'#8A6A48', earthDark:'#6C5136', moss:'#7E9A57', wetEarth:'#5E4631', mud:'#4E3B2A', mudHi:'#9DB8C2',
     wood:'#CFA266', woodDark:'#A67945', char:'#3B2F28',
     water:'#5F9DB5', waterHi:'#DCEEF3',
     flameR:'#C8463B', flameO:'#E8833A', flameY:'#F6CB4C',
@@ -23,9 +23,19 @@ const ART = (function(){
     g.moveTo(x+s*a,y); g.lineTo(x+s*a,y+s*.5); g.moveTo(x+s*b,y+s*.5); g.lineTo(x+s*b,y+s); g.stroke();
   }
   // maa: ohut laatta, tai täysi ruutu kun alla on kiinteää (pankki, kumpu)
+  // o.wet 0..1: kastuu veden alla; o.mud: vesi on imeytynyt läpi, pinnalla mutaa
   function earth(g,x,y,s,o={}){
     const h = o.full? s+.5 : s*.42;
-    g.fillStyle = o.mine? mix(C.earth,'#FFFFFF',.25) : C.earth; rr(g,x,y,s+(o.full?.5:0),h,o.full?0:s*.1); g.fill();
+    let col = o.mine? mix(C.earth,'#FFFFFF',.25) : C.earth;
+    if(o.mud) col=mix(col,C.wetEarth,.8); else if(o.wet) col=mix(col,C.wetEarth,Math.min(1,o.wet));
+    g.fillStyle = col; rr(g,x,y,s+(o.full?.5:0),h,o.full?0:s*.1); g.fill();
+    if(o.mud){
+      g.fillStyle=C.mud; rr(g,x,y,s+.5,s*.16,s*.05); g.fill();
+      const k=o.seed||.5; g.fillStyle=C.mudHi; g.globalAlpha=.55;
+      g.beginPath(); g.ellipse(x+s*(.2+.5*k),y+s*.07,s*.14,s*.035,0,0,7); g.fill(); g.globalAlpha=1;
+      if(!o.full){ g.fillStyle=C.earthDark; g.fillRect(x+s*.08,y+h-s*.08,s*.84,s*.08); }
+      return;
+    }
     if(!o.full){ g.fillStyle=C.earthDark; g.fillRect(x+s*.08,y+h-s*.08,s*.84,s*.08); }
     // pieniä kiviä
     g.fillStyle='rgba(255,255,255,.18)'; const k=o.seed||0;

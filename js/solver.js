@@ -10,9 +10,9 @@ const PPSolver = (function(){
   function solve(def,pieces,opts={}){
     const w=makeWorld(def,pieces); const s0=newState(w);
     const P=w.guards.length? w.guards.reduce((a,G)=>lcm(a,G.P),1):1;
-    const timeDep = P>1 || w.fireEnd>0;
-    // aika vaikuttaa tilaan: tulen aikana tarkka hetki, sen jälkeen vain vartijoiden vaihe
-    const tk = s => (s.t < w.fireEnd)? 'f'+s.t : 'p'+(s.t%P);
+    const timeDep = P>1 || w.tEnd>0;
+    // aika vaikuttaa tilaan: tulen ja imeytymisen aikana tarkka hetki, sen jälkeen vain vartijoiden vaihe
+    const tk = s => (s.t < w.tEnd)? 'f'+s.t : 'p'+(s.t%P);
     const rest = s => settled(w,s);
     const q=[]; let won=null, cnt=0;
     const dom=new Map();

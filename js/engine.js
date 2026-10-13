@@ -15,6 +15,9 @@ const BURN = 50;             // kauanko ruutu palaa
 const SPREAD_UP = 20;        // ylös: naapuri syttyy 1 s kuluttua
 const SPREAD_SIDE = 40;      // sivulle tyynellä
 const SPREAD_WIND = [40,16,8];// sivulle myötätuuleen: tyyni / heikko / kova
+// imeytyminen: maapohja imee vettä, kivi ei. Yhden ruudun paksuinen maapohja laskee
+// koko altaan pintaa rivin DRAIN tickissä; paksumpi maa hitaammin, kivikohdat eivät ime lainkaan.
+const DRAIN = 300;           // 15 s per rivi yhden ruudun maakerroksen läpi
 const halfSteps=(sp,t)=>Math.floor(t*sp/2)-Math.floor((t-1)*sp/2);
 
 // ruutukoodit
@@ -42,6 +45,9 @@ function parseLevel(def){
       if(ch==='P') start={x:c*U, y:(r+1)*U};
     }
   });
+  // veden keskellä oleva avain on vedessä (kartassa ruutuun mahtuu vain yksi merkki)
+  const chAt=(r,c)=> (def.map[r]||'')[c];
+  for(const K of keys) if(chAt(K.r,K.c-1)==='w'||chAt(K.r,K.c+1)==='w'||chAt(K.r-1,K.c)==='w') g[K.r*COLS+K.c]=WATER;
   return {g, wind, start, keys, exit, fires};
 }
 
@@ -97,8 +103,9 @@ function makeWorld(def, pieces){
     if(p.el==='earth') for(const [r,c] of pieceCells(p)) g[r*COLS+c]=EARTH;
     if(p.el==='wind') for(const [r,c] of pieceCells(p)) wind[r*COLS+c]=p.dir*(p.strong?2:1);
   }
-  const water=[];
-  for(const p of ps) if(p.el==='water') water.push(...pour(g,p.r,p.c,p.len,p.h));
+  const water=[], wT0=new Int32Array(COLS*ROWS);
+  for(const p of ps) if(p.el==='water') for(const i of pour(g,p.r,p.c,p.len,p.h)){ water.push(i); wT0[i]=p.t0||0; }
+  const {drainA,drainT,mudT,drainEnd}=drainSchedule(g,wT0);
   // tuli: syttymisajat lyhimpinä polkuina puuta pitkin
   const ign=new Int32Array(COLS*ROWS).fill(-1);
   let fireEnd=0;
@@ -131,8 +138,48 @@ function makeWorld(def, pieces){
   }
   const guards=(def.guards||[]).map(G=>{ const R=(G.c1-G.c0)*U; return {...G, R, P:2*R}; });
   let hasWind=false; for(let i=0;i<wind.length;i++) if(wind[i]){ hasWind=true; break; }
-  return {g, wind, ign, fireEnd, water, start, keys, exit, guards, hasWind, allKeys:(1<<keys.length)-1};
+  return {g, wind, ign, fireEnd, water, drainA, drainT, mudT, tEnd:Math.max(fireEnd,drainEnd),
+    start, keys, exit, guards, hasWind, allKeys:(1<<keys.length)-1};
 }
+
+// Imeytymisen aikataulu. Jokainen allas (yhtenäinen vesialue) laskee rivi kerrallaan ylhäältä.
+// Kunkin sarakkeen pohja on ruutu alimman vesiruudun alla (piikkien alla niiden alusta).
+// Maapohja imee nopeudella 1/paksuus, kivi ei lainkaan. Kun sarakkeen vesi on imeytynyt, maapohjasta tulee mutaa.
+function drainSchedule(g,wT0){
+  const N=COLS*ROWS, drainA=new Int32Array(N).fill(-1), drainT=new Int32Array(N).fill(-1), mudT=new Int32Array(N).fill(-1);
+  const seen=new Uint8Array(N); let drainEnd=0;
+  for(let i0=0;i0<N;i0++){
+    if(g[i0]!==WATER || seen[i0]) continue;
+    const comp=[i0]; seen[i0]=1;
+    for(let k=0;k<comp.length;k++){ const i=comp[k], r=(i/COLS)|0, c=i%COLS;
+      for(const [rr,cc] of [[r-1,c],[r+1,c],[r,c-1],[r,c+1]]){
+        if(rr<0||rr>=ROWS||cc<0||cc>=COLS) continue; const j=rr*COLS+cc;
+        if(g[j]===WATER && !seen[j]){ seen[j]=1; comp.push(j); } } }
+    let t0=0; const low={};                            // sarake -> alin vesirivi
+    for(const i of comp){ const r=(i/COLS)|0, c=i%COLS; t0=Math.max(t0,wT0[i]); if(low[c]===undefined||r>low[c]) low[c]=r; }
+    const absorb={}, bottom={};
+    for(const c in low){
+      let r=low[c]+1; if(r<ROWS && g[r*COLS+ +c]===SPIKE) r++;
+      let d=0; while(r+d<ROWS && g[(r+d)*COLS+ +c]===EARTH) d++;
+      absorb[c]= d? 1/d : 0; bottom[c]= d? r*COLS+ +c : -1;
+    }
+    const rows=[...new Set(comp.map(i=>(i/COLS)|0))].sort((a,b)=>a-b);
+    let t=t0;
+    for(const r of rows){
+      let rate=0; for(const c in low) if(low[c]>=r) rate+=absorb[c];
+      if(!rate) break;                                  // kivipohja: loput vedestä pysyy
+      const cells=comp.filter(i=>((i/COLS)|0)===r);
+      const a=Math.round(t); t+=cells.length*DRAIN/rate; const b=Math.round(t);
+      for(const i of cells){ drainA[i]=a; drainT[i]=b; }
+      for(const c in low) if(low[c]===r && bottom[c]>=0) mudT[bottom[c]]=b;
+      drainEnd=Math.max(drainEnd,b);
+    }
+  }
+  return {drainA,drainT,mudT,drainEnd};
+}
+// onko ruudussa vettä hetkellä t
+function wetAt(w,t,i){ return w.g[i]===WATER && (w.drainT[i]<0 || t<w.drainT[i]); }
+function mudAt(w,t,i){ return w.mudT[i]>=0 && t>=w.mudT[i]; }
 
 function newState(w){
   return {x:w.start.x, y:w.start.y, m:0, jt:0, jd:0, peak:w.start.y, dv:0, dead:0, won:0, t:0, keys:0, cause:'', face:1};
@@ -150,6 +197,7 @@ function tileAt(w,s,r,c){
   if(r<0||r>=ROWS||c<0||c>=COLS) return E;
   const i=r*COLS+c, t=w.g[i];
   if(w.ign[i]>=0 && burnable(t) && s.t>=w.ign[i]+BURN) return E;
+  if(t===WATER && !wetAt(w,s.t,i)) return E;
   return t;
 }
 function burningAt(w,t,i){ return w.ign[i]>=0 && t>=w.ign[i] && t<w.ign[i]+BURN; }
@@ -174,15 +222,21 @@ function blocked(w,s,x,y,swim){
   return false;
 }
 function bodyCols(s){ return [s.x>>2, (s.x+U-1)>>2]; }
-function depthAt(w,r,c){ let n=0; while(r>=0 && r<ROWS && w.g[r*COLS+c]===WATER){ n++; r++; } return n; }
+function depthAt(w,t,r,c){ let n=0; while(r>=0 && r<ROWS && wetAt(w,t,r*COLS+c)){ n++; r++; } return n; }
 function deepWaterAt(w,s){
   const r=Math.floor((s.y-1)/U); const [c0,c1]=bodyCols(s);
-  for(let c=c0;c<=c1;c++) if(depthAt(w,r,c)>=2) return true;
+  for(let c=c0;c<=c1;c++) if(depthAt(w,s.t,r,c)>=2) return true;
   return false;
 }
 function feetInWater(w,s){
   const r=Math.floor((s.y-1)/U); const [c0,c1]=bodyCols(s);
-  for(let c=c0;c<=c1;c++) if(r>=0&&r<ROWS&&w.g[r*COLS+c]===WATER) return true;
+  for(let c=c0;c<=c1;c++) if(r>=0&&r<ROWS&&wetAt(w,s.t,r*COLS+c)) return true;
+  return false;
+}
+// mutaa jalkojen alla: kävely ja hyppy hitaita kuin kahlatessa
+function onMud(w,s){
+  if(s.y%U) return false; const r=s.y/U; const [c0,c1]=bodyCols(s);
+  for(let c=c0;c<=c1;c++) if(r<ROWS && mudAt(w,s.t,r*COLS+c)) return true;
   return false;
 }
 // uidessa jalkojen tavoitekorkeus: pinnan yläreuna + FLOAT
@@ -190,8 +244,8 @@ function floatY(w,s){
   const [c0,c1]=bodyCols(s); let best=null;
   for(let c=c0;c<=c1;c++){
     let r=Math.floor((s.y-1)/U);
-    if(r<0||r>=ROWS||w.g[r*COLS+c]!==WATER){ r++; if(r<0||r>=ROWS||w.g[r*COLS+c]!==WATER) continue; }
-    while(r-1>=0 && w.g[(r-1)*COLS+c]===WATER) r--;
+    if(r<0||r>=ROWS||!wetAt(w,s.t,r*COLS+c)){ r++; if(r<0||r>=ROWS||!wetAt(w,s.t,r*COLS+c)) continue; }
+    while(r-1>=0 && wetAt(w,s.t,(r-1)*COLS+c)) r--;
     const fy=r*U+FLOAT; if(best===null||fy<best) best=fy;
   }
   return best;
@@ -250,7 +304,7 @@ function step(w,s,inp){
     if(!sup.length){ s.m=2; s.peak=s.y; }
     else if(deepWaterAt(w,s)){ s.m=3; s.peak=s.y; }
     else{
-      const sp = feetInWater(w,s)? SWIM_SP : WALK_SP;
+      const sp = (feetInWater(w,s)||onMud(w,s))? SWIM_SP : WALK_SP;
       if(inp.dir) s.face=inp.dir;
       if(inp.jump){ s.m=1; s.jt=0; s.jd=inp.dir*sp; s.peak=s.y; }
       else drift(w,s,inp.dir*sp+wsp,false);
@@ -316,7 +370,7 @@ function waterPreview(def, piece, others){
   return pour(w.g.slice(),piece.r,piece.c,piece.len,piece.h);
 }
 
-const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
+const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,DRAIN,wetAt,mudAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
   parseLevel,makeWorld,newState,cloneS,step,freeFor,tileAt,burningAt,supportCols,guardPos,settled,pieceCells,pour,waterPreview,floatY,burnable};
 if(typeof module!=='undefined') module.exports=API;
 if(typeof self!=='undefined') self.PPEngine=API;

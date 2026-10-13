@@ -13,6 +13,10 @@ Pelaaja lisää sen oikeaan kohtaan, ja kenttä muuttuu läpäistäväksi.
 - **Vesi** pehmentää: valuu alimpaan kohtaan ja täyttää yhden altaan valittuun korkeuteen (rivejä tai täysi allas). Allas ei tulvi yli.
   Vähintään kahden ruudun syvyiseen veteen voi hypätä mistä korkeudesta tahansa; matalassa vedessä kahlataan.
   Mitä korkeammalta hyppää, sitä syvemmälle uppoaa ennen pintaan nousua. Pohjan piikit jäävät veden alle ja ovat yhä vaarallisia.
+  Maapohjainen allas imee veden hitaasti: yhden ruudun paksuisen maapohjan läpi pinta laskee rivin noin 15 sekunnissa.
+  Paksumpi maa imee hitaammin (kaksi ruutua: 30 s), ja kivikohdat eivät ime lainkaan, joten osittain kivinen pohja on hitaampi
+  ja kokonaan kivinen allas pysyy täynnä. Imeytyminen alkaa veden kaatohetkestä. Kun vesi on mennyt läpi, pohjasta tulee mutaa,
+  jossa kävely ja hyppy ovat hitaita kuin kahlatessa.
   Uidessa liikutaan hitaasti, ja vedestä pääsee ylös reunalle, joka on enintään ruudun pinnan yläpuolella.
 
 ## Sivut
