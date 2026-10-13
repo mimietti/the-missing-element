@@ -161,14 +161,15 @@ function supportCols(w,s){
   for(let c=c0;c<=c1;c++) if(standable(tileAt(w,s,r,c))) out.push(c);
   return out;
 }
-// kiviseinä ja puuaita estävät liikkeen; uidessa myös maa ja puulattia (altaan reunat)
+// kivi, maa ja puuaita ovat kiinteitä: niiden sisään ei voi kävellä eikä hypätä, vain päälle.
+// Puulattian läpi voi hypätä alhaalta; uidessa sekin estää (altaan reunat).
 function blocked(w,s,x,y,swim){
   if(x<0 || x+U>COLS*U) return true;
   const r0=Math.floor((y-8)/U), r1=Math.floor((y-1)/U), c0=x>>2, c1=(x+U-1)>>2;
   for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++){
     const t=tileAt(w,s,r,c);
-    if(t===WALL||t===FENCE) return true;
-    if(swim && (t===EARTH||t===WOOD)) return true;
+    if(t===WALL||t===FENCE||t===EARTH) return true;
+    if(swim && t===WOOD) return true;
   }
   return false;
 }

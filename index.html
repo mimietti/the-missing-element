@@ -469,7 +469,7 @@ function draw(alpha){
     drawPlayer(ix,iy); ctx.restore(); }
   ctx.globalAlpha=1;
   const hideWater = edit && placed[edit.k] && placed[edit.k].el==='water';
-  if(!hideWater){ const wc=[]; for(let i=0;i<world.g.length;i++) if(world.g[i]===WATER) wc.push(i); drawWater(wc); }
+  if(!hideWater){ const wc=[]; for(let i=0;i<world.g.length;i++) if(world.g[i]===WATER || (world.g[i]===SPIKE && i>=COLS && world.g[i-COLS]===WATER)) wc.push(i); drawWater(wc,.45); }
   drawSplash();
   drawFire();
   if(exitT>=0 && exitT<EX.turn+80 && world.exit) drawExitKey(ix,iy);

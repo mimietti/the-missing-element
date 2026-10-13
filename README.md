@@ -5,7 +5,7 @@ Pelaaja lisää sen oikeaan kohtaan, ja kenttä muuttuu läpäistäväksi.
 
 ## Elementit
 
-- **Maa** lisää: pala lattiaa.
+- **Maa** lisää: pala lattiaa. Maa on kiinteää: sen sisään ei voi kävellä eikä hypätä, vain päälle. Puulattian läpi voi hypätä alhaalta.
 - **Tuli** poistaa: polttaa puun (puulattia `-`, puuaita `H`). Naapuri syttyy ylöspäin 1 sekunnissa, sivulle 2 sekunnissa, alas ei lainkaan.
   Tuuli nopeuttaa leviämistä tuulen suuntaan ja estää sen vastatuuleen. Palava ruutu on vaarallinen.
   Kenttään voi laittaa valmiiksi palavan puulattian `f` tai puuaidan `F`.
