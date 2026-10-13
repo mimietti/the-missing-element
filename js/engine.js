@@ -266,6 +266,7 @@ function land(s){
 }
 // yksi yksikkö alaspäin: true, jos liike päättyi (laskeutui tai putosi syvään veteen)
 function fallUnit(w,s){
+  if(supportCols(w,s).length){ land(s); return true; }  // sivuliike toi jalkojen alle tason: laskeudu sen päälle
   s.y++;
   if(supportCols(w,s).length){ land(s); return true; }
   if(feetInWater(w,s) && deepWaterAt(w,s)){            // syvä vesi: uppoaa pudotuksen mukaan
@@ -321,7 +322,7 @@ function step(w,s,inp){
         s.dv--;
         if(supportCols(w,s).length) s.dv=0; else s.y++;
       }
-      else if(s.y<fy) s.y++;
+      else if(s.y<fy){ if(!supportCols(w,s).length) s.y++; }
       else if(s.y>fy && !blocked(w,s,s.x,s.y-1,false)) s.y--;
       if(s.m===3 && s.dv<=0 && fy!==null && s.y<=fy && supportCols(w,s).length && !deepWaterAt(w,s)) s.m=0;
     }
