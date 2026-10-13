@@ -152,7 +152,7 @@ function persist(){ try{ if(!TEST) localStorage.setItem('tme-progress',String(pr
 let li=0, def, world, st, prev, placed=[], fireT0={}, mode='play', edit=null, deadT=0, frame=0;
 const held={L:false,R:false,J:false}; let jumpLatch=false;
 
-const samePiece=(a,b)=>a.el===b.el && (a.len||0)===(b.len||0) && (a.dir||0)===(b.dir||0) && !!a.strong===!!b.strong;
+const samePiece=(a,b)=>a.el===b.el && (a.len||0)===(b.len||0) && (a.h||0)===(b.h||0) && (a.dir||0)===(b.dir||0) && !!a.strong===!!b.strong;
 function loadLevel(i){
   li=i; def=GL[i];
   const sv=saved[levelKey(def)];

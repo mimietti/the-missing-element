@@ -8,16 +8,19 @@ const WALK_SP = 2;           // puoliyksikköä per tick
 const SWIM_SP = 1;           // uinti ja kahlaus: puolet kävelystä
 const WIND_SP = [0,1,3];     // tuulen työntö: heikko 1, kova 3 (kovempi kuin kävely, vastaan ei pääse)
 const FLOAT = 4;             // uidessa jalat ovat näin monta yksikköä pinnan alla
+const DIVE = 0.6;            // sukellus: uppoaa pinnan alle 0.6 × pudotuskorkeus
+const DIVE_MAX = 24;         // enintään 6 ruutua
 // tuli (tickejä, 20 tickiä = 1 s)
-const BURN = 30;             // kauanko ruutu palaa
-const SPREAD_UP = 6;         // ylös
-const SPREAD_SIDE = 16;      // sivulle tyynellä
-const SPREAD_WIND = [16,5,2];// sivulle myötätuuleen: tyyni / heikko / kova
+const BURN = 50;             // kauanko ruutu palaa
+const SPREAD_UP = 20;        // ylös: naapuri syttyy 1 s kuluttua
+const SPREAD_SIDE = 40;      // sivulle tyynellä
+const SPREAD_WIND = [40,16,8];// sivulle myötätuuleen: tyyni / heikko / kova
 const halfSteps=(sp,t)=>Math.floor(t*sp/2)-Math.floor((t-1)*sp/2);
 
 // ruutukoodit
 const E=0, EARTH=1, WALL=2, WOOD=3, FENCE=4, SPIKE=6, EXIT=7, WATER=8;
-const CH = {'=':EARTH,'#':WALL,'-':WOOD,'H':FENCE,'^':SPIKE,'E':EXIT,'w':WATER};
+const CH = {'=':EARTH,'#':WALL,'-':WOOD,'H':FENCE,'^':SPIKE,'E':EXIT,'w':WATER,'f':WOOD,'F':FENCE};
+const FIRECH = {'f':1,'F':1};   // valmiiksi palava puulattia / puuaita
 const WINDCH = {'<':-1,'>':1,'[':-2,']':2};
 const ELEMENTS = ['earth','fire','wind','water'];
 const WIND_H = 3;            // tuulipalan korkeus ruutuina (rivit r-2..r)
@@ -27,7 +30,7 @@ const burnable = t => t===WOOD||t===FENCE;
 
 function parseLevel(def){
   const g = new Uint8Array(COLS*ROWS), wind = new Int8Array(COLS*ROWS);
-  let start=null; const keys=[]; let exit=null;
+  let start=null; const keys=[]; let exit=null; const fires=[];
   def.map.forEach((row,r)=>{
     for(let c=0;c<COLS;c++){
       const ch=row[c]||'.';
@@ -35,10 +38,11 @@ function parseLevel(def){
       if(WINDCH[ch]) wind[r*COLS+c]=WINDCH[ch];
       if(ch==='E') exit={r,c};
       if(ch==='k') keys.push({r,c});
+      if(FIRECH[ch]) fires.push({el:'fire',r,c,t0:0});
       if(ch==='P') start={x:c*U, y:(r+1)*U};
     }
   });
-  return {g, wind, start, keys, exit};
+  return {g, wind, start, keys, exit, fires};
 }
 
 // palan ruudut (tuli: yksi ruutu, vesi: kaatokohta)
@@ -50,12 +54,15 @@ function pieceCells(p){
   return out;
 }
 
-// Vesi valuu alimpaan kohtaan ja täyttää altaan rivi kerrallaan, kunnes määrä loppuu.
-// Jos rivi ei ole molemmista päistä suljettu, vesi valuu reunan yli seuraavaan kohtaan.
-function pour(g, r, c, vol){
-  const cells=[];
-  const open=(rr,cc)=> rr>=0&&rr<ROWS&&cc>=0&&cc<COLS && !solid(g[rr*COLS+cc]) && g[rr*COLS+cc]!==WATER;
-  const held=(rr,cc)=> rr+1<ROWS && (solid(g[(rr+1)*COLS+cc]) || g[(rr+1)*COLS+cc]===WATER);
+// Vesi valuu alimpaan kohtaan ja täyttää yhden altaan rivi kerrallaan, kunnes määrä loppuu
+// tai allas on täynnä. Ennen täyttöä vesi valuu reunojen yli altaaseen; täyttynyt allas ei tulvi.
+// h = veden korkeus riveinä (99 = täysi allas). Vanhoissa kentissä ilman h:ta vol on ruutujen määrä.
+// Piikit jäävät veden alle: vesi asettuu niiden päälle.
+function pour(g, r, c, vol, h){
+  const cells=[]; let rows=0;
+  if(h) vol=1e9;
+  const open=(rr,cc)=> rr>=0&&rr<ROWS&&cc>=0&&cc<COLS && !solid(g[rr*COLS+cc]) && g[rr*COLS+cc]!==WATER && g[rr*COLS+cc]!==SPIKE;
+  const held=(rr,cc)=> rr+1<ROWS && (solid(g[(rr+1)*COLS+cc]) || g[(rr+1)*COLS+cc]===WATER || g[(rr+1)*COLS+cc]===SPIKE);
   if(!open(r,c)) return cells;
   for(let guard=0; guard<200 && vol>0; guard++){
     while(r+1<ROWS && open(r+1,c)) r++;
@@ -65,13 +72,15 @@ function pour(g, r, c, vol){
     while(open(r,b+1) && held(r,b+1)) b++;
     const lDrop=open(r,a-1), rDrop=open(r,b+1);        // avoin mutta ei kannateltu = reuna
     if(lDrop||rDrop){                                  // vesi valuu reunan yli
+      if(cells.length) break;                          // allas on täynnä: ylimäärä ei tulvi
       c = (lDrop && rDrop)? ((c-a <= b-c)? a-1 : b+1) : (lDrop? a-1 : b+1);
       continue;
     }
     const w=b-a+1;
     if(w>vol) break;                                   // määrä ei riitä koko riville
     for(let x=a;x<=b;x++){ g[r*COLS+x]=WATER; cells.push(r*COLS+x); }
-    vol-=w;
+    vol-=w; rows++;
+    if(h && rows>=h) break;
     let nc=-1; for(let x=a;x<=b;x++) if(open(r-1,x)){ nc=x; break; }
     if(nc<0 || r-1<1) break;
     r=r-1; c=nc;
@@ -82,14 +91,14 @@ function pour(g, r, c, vol){
 // Rakentaa maailman: perus + maa- ja tuulipalat, sitten vesi, sitten tulen aikataulu.
 // piece: {el, len, dir, strong, r, c, t0?}
 function makeWorld(def, pieces){
-  const {g,wind,start,keys,exit}=parseLevel(def);
-  const ps=(pieces||[]).filter(Boolean);
+  const {g,wind,start,keys,exit,fires:lvFires}=parseLevel(def);
+  const ps=(pieces||[]).filter(Boolean).concat(lvFires);
   for(const p of ps){
     if(p.el==='earth') for(const [r,c] of pieceCells(p)) g[r*COLS+c]=EARTH;
     if(p.el==='wind') for(const [r,c] of pieceCells(p)) wind[r*COLS+c]=p.dir*(p.strong?2:1);
   }
   const water=[];
-  for(const p of ps) if(p.el==='water') water.push(...pour(g,p.r,p.c,p.len));
+  for(const p of ps) if(p.el==='water') water.push(...pour(g,p.r,p.c,p.len,p.h));
   // tuli: syttymisajat lyhimpinä polkuina puuta pitkin
   const ign=new Int32Array(COLS*ROWS).fill(-1);
   let fireEnd=0;
@@ -126,7 +135,7 @@ function makeWorld(def, pieces){
 }
 
 function newState(w){
-  return {x:w.start.x, y:w.start.y, m:0, jt:0, jd:0, peak:w.start.y, dead:0, won:0, t:0, keys:0, cause:'', face:1};
+  return {x:w.start.x, y:w.start.y, m:0, jt:0, jd:0, peak:w.start.y, dv:0, dead:0, won:0, t:0, keys:0, cause:'', face:1};
 }
 function cloneS(s){ return {...s}; }
 
@@ -204,7 +213,8 @@ function land(s){
 function fallUnit(w,s){
   s.y++;
   if(supportCols(w,s).length){ land(s); return true; }
-  if(feetInWater(w,s) && deepWaterAt(w,s)){ s.m=3; s.peak=s.y; return true; }
+  if(feetInWater(w,s) && deepWaterAt(w,s)){            // syvä vesi: uppoaa pudotuksen mukaan
+    s.dv=Math.min(DIVE_MAX, Math.round((s.y-s.peak)*DIVE)); s.m=3; s.peak=s.y; return true; }
   return false;
 }
 function checkHazards(w,s){
@@ -247,14 +257,18 @@ function step(w,s,inp){
   }
   if(s.m===3){
     if(inp.dir) s.face=inp.dir;
-    if(inp.jump && s.y===floatY(w,s)){ s.m=1; s.jt=0; s.jd=inp.dir*WALK_SP; s.peak=s.y; }
+    if(inp.jump && s.dv<=0 && s.y===floatY(w,s)){ s.m=1; s.jt=0; s.jd=inp.dir*WALK_SP; s.peak=s.y; }
     else{
       drift(w,s,inp.dir*SWIM_SP+wsp,true);
       const fy=floatY(w,s);
-      if(fy===null){ s.m=2; s.peak=s.y; }
+      if(fy===null){ s.m=2; s.peak=s.y; s.dv=0; }
+      else if(s.dv>0){                                 // sukellus jatkuu, kunnes vauhti loppuu tai pohja tulee vastaan
+        s.dv--;
+        if(supportCols(w,s).length) s.dv=0; else s.y++;
+      }
       else if(s.y<fy) s.y++;
       else if(s.y>fy && !blocked(w,s,s.x,s.y-1,false)) s.y--;
-      if(s.m===3 && supportCols(w,s).length && !deepWaterAt(w,s)) s.m=0;
+      if(s.m===3 && s.dv<=0 && fy!==null && s.y<=fy && supportCols(w,s).length && !deepWaterAt(w,s)) s.m=0;
     }
   }
   else if(s.m===1){
@@ -292,16 +306,16 @@ function freeFor(def, piece, others){
   if(piece.el==='earth') return cells.every(([r,c])=>{ const t=g[r*COLS+c]; return (t===E||t===WATER) && !key(r,c); });
   if(piece.el==='fire'){ const [r,c]=cells[0]; const t=g[r*COLS+c]; return (t===E||burnable(t)) && !key(r,c); }
   if(piece.el==='wind') return cells.every(([r,c])=>{ const t=g[r*COLS+c]; return t===E||t===WATER; });
-  if(piece.el==='water') return pour(g.slice(),piece.r,piece.c,piece.len).length>0;
+  if(piece.el==='water') return pour(g.slice(),piece.r,piece.c,piece.len,piece.h).length>0;
   return false;
 }
 // veden lopulliset ruudut esikatselua varten
 function waterPreview(def, piece, others){
   const w=makeWorld(def,(others||[]).filter(o=>o && o.el!=='water'));
-  return pour(w.g.slice(),piece.r,piece.c,piece.len);
+  return pour(w.g.slice(),piece.r,piece.c,piece.len,piece.h);
 }
 
-const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
+const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
   parseLevel,makeWorld,newState,cloneS,step,freeFor,tileAt,burningAt,supportCols,guardPos,settled,pieceCells,pour,waterPreview,floatY,burnable};
 if(typeof module!=='undefined') module.exports=API;
 if(typeof self!=='undefined') self.PPEngine=API;

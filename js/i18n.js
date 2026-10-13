@@ -21,7 +21,7 @@ en: {
   // editor
   'ed.title':'Level editor', 'ed.back':'← Game', 'ed.name':'Level name', 'ed.hint':'Hint for the player',
   'ed.new':'New', 'ed.open':'Open', 'ed.save':'Save', 'ed.text':'Text', 'ed.check':'Check', 'ed.test':'Test',
-  'tool..':'Erase','tool.=':'Earth','tool.#':'Stone','tool.-':'Wood floor','tool.H':'Wooden fence','tool.w':'Water','tool.<':'Wind ←','tool.>':'Wind →','tool.[':'Strong wind ←','tool.]':'Strong wind →','tool.^':'Spike',
+  'tool..':'Erase','tool.=':'Earth','tool.#':'Stone','tool.-':'Wood floor','tool.H':'Wooden fence','tool.f':'Burning wood floor','tool.F':'Burning fence','ed.height':'Height','ed.full':'Fill pool','tool.w':'Water','tool.<':'Wind ←','tool.>':'Wind →','tool.[':'Strong wind ←','tool.]':'Strong wind →','tool.^':'Spike',
   'tool.k':'Key','tool.P':'Start','tool.E':'Door','tool.G':'Guard', 'ed.tools':'Tools',
   'ed.pieces':'Elements on offer', 'ed.offer':'On offer', 'ed.size':'Width', 'ed.amount':'Amount (cells)', 'ed.dir':'Direction', 'ed.strong':'Strong',
   'ed.piecesHelp':'Tick the elements the player gets. Press Solution and tap the spot where it belongs: earth = left end, wind = bottom-left corner of a 3-row area, water = the pouring spot. The check uses this placement.',
@@ -70,7 +70,7 @@ fi: {
   'menu.own':'Omat kentät', 'close':'Sulje', 'editor':'Kenttäeditori', 'lang':'Kieli: suomi',
   'ed.title':'Kenttäeditori', 'ed.back':'← Peli', 'ed.name':'Kentän nimi', 'ed.hint':'Vihje pelaajalle',
   'ed.new':'Uusi', 'ed.open':'Avaa', 'ed.save':'Tallenna', 'ed.text':'Teksti', 'ed.check':'Tarkista', 'ed.test':'Testaa',
-  'tool..':'Pyyhi','tool.=':'Maa','tool.#':'Kivi','tool.-':'Puulattia','tool.H':'Puuaita','tool.w':'Vesi','tool.<':'Tuuli ←','tool.>':'Tuuli →','tool.[':'Kova tuuli ←','tool.]':'Kova tuuli →','tool.^':'Piikki',
+  'tool..':'Pyyhi','tool.=':'Maa','tool.#':'Kivi','tool.-':'Puulattia','tool.H':'Puuaita','tool.f':'Palava puulattia','tool.F':'Palava puuaita','ed.height':'Korkeus','ed.full':'Täysi allas','tool.w':'Vesi','tool.<':'Tuuli ←','tool.>':'Tuuli →','tool.[':'Kova tuuli ←','tool.]':'Kova tuuli →','tool.^':'Piikki',
   'tool.k':'Avain','tool.P':'Aloitus','tool.E':'Ovi','tool.G':'Vartija', 'ed.tools':'Työkalut',
   'ed.pieces':'Tarjolla olevat elementit', 'ed.offer':'Tarjolla', 'ed.size':'Leveys', 'ed.amount':'Määrä (ruutuja)', 'ed.dir':'Suunta', 'ed.strong':'Kova',
   'ed.piecesHelp':'Valitse elementit, jotka pelaaja saa. Paina Ratkaisu ja napauta kohtaa, johon elementti kuuluu: maa = vasen pää, tuuli = kolmen rivin alueen vasen alakulma, vesi = kaatokohta. Tarkistus käyttää tätä sijoitusta.',

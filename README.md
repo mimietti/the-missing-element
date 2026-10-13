@@ -6,11 +6,13 @@ Pelaaja lisää sen oikeaan kohtaan, ja kenttä muuttuu läpäistäväksi.
 ## Elementit
 
 - **Maa** lisää: pala lattiaa.
-- **Tuli** poistaa: polttaa puun (puulattia `-`, puuaita `H`). Leviää ylöspäin nopeasti, sivuille hitaasti, alas ei lainkaan.
+- **Tuli** poistaa: polttaa puun (puulattia `-`, puuaita `H`). Naapuri syttyy ylöspäin 1 sekunnissa, sivulle 2 sekunnissa, alas ei lainkaan.
   Tuuli nopeuttaa leviämistä tuulen suuntaan ja estää sen vastatuuleen. Palava ruutu on vaarallinen.
+  Kenttään voi laittaa valmiiksi palavan puulattian `f` tai puuaidan `F`.
 - **Tuuli** siirtää: kolmen rivin korkuinen alue, joka työntää vasemmalle tai oikealle. Kovaa tuulta vastaan ei pääse.
-- **Vesi** pehmentää: valuu alimpaan kohtaan ja täyttää altaan rivi kerrallaan, kunnes määrä loppuu.
+- **Vesi** pehmentää: valuu alimpaan kohtaan ja täyttää yhden altaan valittuun korkeuteen (rivejä tai täysi allas). Allas ei tulvi yli.
   Vähintään kahden ruudun syvyiseen veteen voi hypätä mistä korkeudesta tahansa; matalassa vedessä kahlataan.
+  Mitä korkeammalta hyppää, sitä syvemmälle uppoaa ennen pintaan nousua. Pohjan piikit jäävät veden alle ja ovat yhä vaarallisia.
   Uidessa liikutaan hitaasti, ja vedestä pääsee ylös reunalle, joka on enintään ruudun pinnan yläpuolella.
 
 ## Sivut

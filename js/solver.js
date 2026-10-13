@@ -19,7 +19,7 @@ const PPSolver = (function(){
     const push=s=>{
       if(s.won){ won=s; return true; }
       if(s.dead) return false;
-      const pk=s.x+','+s.y+','+s.m+','+tk(s), kk=s.keys;
+      const pk=s.x+','+s.y+','+s.m+','+s.dv+','+tk(s), kk=s.keys;
       let arr=dom.get(pk); if(!arr){ arr=[]; dom.set(pk,arr); }
       for(const k2 of arr) if((k2&kk)===kk) return false;
       for(let i=arr.length-1;i>=0;i--) if((kk&arr[i])===arr[i]) arr.splice(i,1);
