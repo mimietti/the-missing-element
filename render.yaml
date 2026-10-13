@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: the-missing-element
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache

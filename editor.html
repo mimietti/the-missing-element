@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#F4F1EA">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Level editor · The Missing Element</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap">
+<style>
+/* Layout: työkalut vasemmalla, ruudukko keskellä, elementit/vartijat/tarkistus oikealla. Kapealla näytöllä pinoutuu. */
+:root{
+  --birch:#E8EBE6; --paper:#F6F6F2; --ink:#2C3A41; --mute:#6E797C; --line:#D3D8D2;
+  --fjord:#3D6F79; --lingon:#BE4A3F; --mustard:#D8A73A; --ok:#2F8F5B;
+  --f:'Jost','Futura','Avenir Next','Century Gothic',system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--birch);color:var(--ink);font:14px/1.4 var(--f);
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+[hidden]{display:none!important}
+.app{height:100%;display:grid;grid-template-columns:auto minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr);gap:10px;padding-block:10px;padding-inline:16px}
+header{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+header .back{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);text-decoration:none;margin-right:6px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;-webkit-user-select:text;user-select:text}
+input[type=checkbox]{width:18px;height:18px;padding:0;accent-color:var(--fjord)}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid var(--fjord);outline-offset:1px}
+#name{font-size:18px;font-weight:500;width:14em;max-width:100%}
+#hint{flex:1;min-width:12em}
+button{font:inherit;font-size:15px;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;touch-action:manipulation}
+button.primary{background:var(--fjord);border-color:var(--fjord);color:#fff}
+button:disabled{opacity:.45}
+.flag{padding:7px 9px;line-height:0}
+.flag svg{display:block;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.tools{display:flex;flex-direction:column;gap:6px;overflow-y:auto;padding-right:2px}
+.tool{display:flex;align-items:center;gap:8px;padding:5px 10px;min-width:132px;text-align:left}
+.tool canvas{width:28px;height:28px;flex:none}
+.tool.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tools .sep{height:1px;background:var(--line);margin:4px 0}
+.stage{min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;position:relative}
+#grid{display:block;border-radius:6px;touch-action:none;box-shadow:0 0 0 1.5px rgba(44,58,65,.12)}
+.coord{position:absolute;left:8px;bottom:6px;font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums}
+.side{display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-width:0}
+.panel{background:var(--paper);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.panel h2{margin:0;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.elrow{display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:10px;border:1.5px solid var(--line)}
+.elrow.off{opacity:.6;border-style:dashed}
+.elrow .top{display:flex;align-items:center;gap:8px}
+.elrow .top canvas{width:30px;height:20px;flex:none}
+.elrow .top label{display:flex;align-items:center;gap:8px;font-weight:600;flex:1}
+.elrow .opts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;color:var(--mute)}
+.elrow .opts select{padding:4px 6px;font-size:14px}
+.elrow .opts label{display:flex;align-items:center;gap:4px}
+.elrow button{padding:5px 10px;font-size:14px}
+.elrow button.on{background:var(--mustard);border-color:var(--mustard);color:#fff}
+.small{font-size:13px;color:var(--mute);margin:0}
+.guard{display:flex;justify-content:space-between;align-items:center;font-variant-numeric:tabular-nums}
+.guard button{padding:4px 9px;font-size:13px}
+.results{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.results .row{display:flex;gap:8px;align-items:baseline}
+.results .mark{width:1.2em;font-weight:700;text-align:center;flex:none}
+.results .good .mark{color:var(--ok)} .results .bad .mark{color:var(--lingon)} .results .warn .mark{color:var(--mustard)}
+.overlay{position:fixed;inset:0;background:rgba(44,58,65,.35);display:flex;align-items:center;justify-content:center;padding:16px;z-index:5}
+.card{background:var(--paper);border-radius:16px;padding:20px 22px;box-shadow:0 10px 40px rgba(44,58,65,.25);display:flex;flex-direction:column;gap:12px;max-width:min(640px,100%);max-height:90%;overflow:auto;width:100%}
+.card h3{margin:0;font-size:20px;font-weight:500}
+.card h4{margin:6px 0 0;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.card .rowb{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.list{display:flex;flex-wrap:wrap;gap:6px}
+.list .item{display:flex;gap:2px}
+.list .item button:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+.list .item button.del{border-top-left-radius:0;border-bottom-left-radius:0;color:var(--lingon);padding-inline:9px}
+textarea{width:100%;min-height:260px;font:12px/1.35 ui-monospace,Menlo,monospace;white-space:pre}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 16px;border-radius:999px;font-size:15px;z-index:9;pointer-events:none}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto auto auto;height:auto}
+  .tools{flex-direction:row;flex-wrap:wrap}
+  .tool{min-width:0}
+  .stage{height:62vw}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <a class="back" href="index.html" data-i18n="ed.back">← Game</a>
+    <input id="name" data-i18n-aria="ed.name" data-i18n-ph="ed.name" maxlength="40">
+    <input id="hint" data-i18n-aria="ed.hint" data-i18n-ph="ed.hint" maxlength="140">
+    <button id="newBtn" data-i18n="ed.new"></button>
+    <button id="openBtn" data-i18n="ed.open"></button>
+    <button id="saveBtn" data-i18n="ed.save"></button>
+    <button id="textBtn" data-i18n="ed.text"></button>
+    <button id="checkBtn" data-i18n="ed.check"></button>
+    <button id="testBtn" class="primary" data-i18n="ed.test"></button>
+    <button id="langBtn" class="flag"></button>
+  </header>
+
+  <nav class="tools" id="tools" data-i18n-aria="ed.tools"></nav>
+
+  <div class="stage" id="stage">
+    <canvas id="grid"></canvas>
+    <div class="coord" id="coord"></div>
+  </div>
+
+  <aside class="side">
+    <section class="panel">
+      <h2 data-i18n="ed.pieces"></h2>
+      <div id="pieces" style="display:flex;flex-direction:column;gap:8px"></div>
+      <p class="small" data-i18n="ed.piecesHelp"></p>
+    </section>
+    <section class="panel">
+      <h2 data-i18n="ed.guards"></h2>
+      <div id="guards"></div>
+      <p class="small" data-i18n="ed.guardsHelp"></p>
+    </section>
+    <section class="panel">
+      <h2 data-i18n="ed.checkTitle"></h2>
+      <label class="small"><input type="checkbox" id="altChk"> <span data-i18n="ed.alt"></span></label>
+      <div class="results" id="results"></div>
+    </section>
+  </aside>
+</div>
+<div class="overlay" id="overlay" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="js/i18n.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/art.js"></script>
+<script src="js/levels.js"></script>
+<script>
+(()=>{
+const {COLS,ROWS,WIND_H,ELEMENTS,freeFor,pieceCells,waterPreview}=PPEngine;
+const $=id=>document.getElementById(id);
+const A=ART, C=ART.C;
+const PCOL={earth:'#D8A73A',fire:'#BE4A3F',wind:'#3D6F79',water:'#2F5FA8'};
+const elName=el=>T('el.'+el);
+const DEFAULTS={earth:{el:'earth',len:2},fire:{el:'fire'},wind:{el:'wind',len:4,dir:1,strong:false},water:{el:'water',len:12}};
+const WATER_AMOUNTS=[2,3,4,5,6,8,9,10,12,14,15,16,18,20,24,30];
+
+const TOOLS=[{id:'.'},{id:'='},{id:'#'},{id:'-'},{id:'H'},{id:'w'},{id:'^'},{sep:true},{id:'<'},{id:'>'},{id:'['},{id:']'},{sep:true},{id:'k'},{id:'P'},{id:'E'},{id:'G'}];
+
+// ---------- tila ----------
+let L, tool='=', solK=-1, dirty=false;
+function blank(){
+  const map=[]; for(let r=0;r<ROWS;r++){ let s=''; for(let c=0;c<COLS;c++) s += (r===0||r===ROWS-1||c===0||c===COLS-1)? '#' : '.'; map.push(s); }
+  map[ROWS-2]= '#' + '='.repeat(COLS-2) + '#';
+  return {name:T('ed.newLevel'),hint:'',pieces:[{...DEFAULTS.earth}],sol:[null],guards:[],map:setCh(setCh(map,ROWS-3,2,'P'),ROWS-3,COLS-3,'E')};
+}
+function setCh(map,r,c,ch){ const m=map.slice(); m[r]=m[r].slice(0,c)+ch+m[r].slice(c+1); return m; }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function cleanPiece(p){
+  if(p.el==='earth') return {el:'earth',len:p.len||2};
+  if(p.el==='fire') return {el:'fire'};
+  if(p.el==='wind'){ const o={el:'wind',len:p.len||4,dir:p.dir<0?-1:1}; if(p.strong) o.strong=true; return o; }
+  if(p.el==='water') return {el:'water',len:p.len||12};
+  return null;
+}
+function normalize(o){
+  const x=clone(o); x.guards=x.guards||[];
+  const pairs=(x.pieces||[]).map((p,k)=>[cleanPiece(p||{}),(x.sol||[])[k]||null]).filter(([p])=>p);
+  // yksi kutakin elementtiä, järjestys maa, tuli, tuuli, vesi
+  const seen=new Set(), ok=[]; for(const pr of pairs) if(!seen.has(pr[0].el)){ seen.add(pr[0].el); ok.push(pr); }
+  ok.sort((a,b)=>ELEMENTS.indexOf(a[0].el)-ELEMENTS.indexOf(b[0].el));
+  x.pieces=ok.map(p=>p[0]); x.sol=ok.map(p=>p[1]? {r:p[1].r,c:p[1].c} : null);
+  delete x.custom; return x;
+}
+function exportLevel(){
+  const o={name:L.name.trim()||T('ed.unnamed'),hint:L.hint.trim(),pieces:L.pieces.map(cleanPiece),
+    sol:L.sol.map(s=>s?{r:s.r,c:s.c}:null),map:L.map.slice()};
+  if(L.en) o.en=L.en;
+  if(L.guards.length) o.guards=L.guards.map(g=>({r:g.r,c0:g.c0,c1:g.c1,dir:g.dir}));
+  return o;
+}
+const store={
+  get(k,d){ try{ const v=localStorage.getItem(k); return v==null? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
+};
+function changed(){ dirty=true; store.set('tme-editor-draft',L); clearResults(); draw(); }
+
+// ---------- työkalupalkki ----------
+function buildTools(){
+  const el=$('tools'); el.innerHTML='';
+  TOOLS.forEach(t=>{
+    if(t.sep){ const d=document.createElement('div'); d.className='sep'; el.appendChild(d); return; }
+    const b=document.createElement('button'); b.className='tool'; b.dataset.t=t.id;
+    b.innerHTML='<canvas width="56" height="56"></canvas><span data-i18n="tool.'+t.id+'">'+T('tool.'+t.id)+'</span>';
+    b.onclick=()=>{ tool=t.id; solK=-1; updateTools(); renderPieces(); };
+    el.appendChild(b);
+    const g=b.querySelector('canvas').getContext('2d'); g.scale(2,2);
+    if(t.id==='G') drawGuardIcon(g,0,0,28); else drawCell(g,t.id,0,0,28,{icon:true});
+  });
+  updateTools();
+}
+function updateTools(){ document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on', solK<0 && b.dataset.t===tool)); }
+
+// ---------- piirto ----------
+const cv=$('grid'), ctx=cv.getContext('2d'); let ts=24, dpr=1;
+function resize(){
+  const s=$('stage').getBoundingClientRect();
+  ts=Math.max(10,Math.floor(Math.min(s.width/COLS,s.height/ROWS)));
+  dpr=window.devicePixelRatio||1;
+  cv.style.width=ts*COLS+'px'; cv.style.height=ts*ROWS+'px';
+  cv.width=Math.round(ts*COLS*dpr); cv.height=Math.round(ts*ROWS*dpr); draw();
+}
+const WINDV={'<':-1,'>':1,'[':-2,']':2};
+function windArrow(g,x,y,s,v){
+  const d=Math.sign(v), cy=y+s/2; g.strokeStyle=C.fjord; g.fillStyle=C.fjord; g.lineWidth=Math.abs(v)===2? 2.5 : 1.5; g.globalAlpha=.75;
+  g.beginPath(); g.moveTo(x+s/2-d*s*.28,cy); g.lineTo(x+s/2+d*s*.15,cy); g.stroke();
+  g.beginPath(); g.moveTo(x+s/2+d*s*.32,cy); g.lineTo(x+s/2+d*s*.12,cy-s*.14); g.lineTo(x+s/2+d*s*.12,cy+s*.14); g.fill(); g.globalAlpha=1;
+}
+function drawCell(g,ch,x,y,s,o={}){
+  if(o.icon){ g.fillStyle=C.bg; g.fillRect(x,y,s,s); }
+  const oy=o.icon? s*.35 : 0;
+  if(ch==='='){ A.earth(g,x,y+oy,s,{full:!o.icon&&o.full, covered:o.covered, seed:o.seed||.3}); }
+  else if(ch==='#') A.stone(g,x,y,s,o.r||0);
+  else if(ch==='-') A.wood(g,x,y+oy,s);
+  else if(ch==='H') A.fence(g,x,y,s,{top:o.icon||o.top});
+  else if(ch==='w') A.water(g,x,y,s,{surface:o.icon||o.surface,alpha:.6});
+  else if(WINDV[ch]){ A.wind(g,x,y,s,WINDV[ch],0,o.seed||.5); windArrow(g,x,y,s,WINDV[ch]); }
+  else if(ch==='^') A.spike(g,x,y,s);
+  else if(ch==='k') A.key(g,x+s/2,y+s/2,s);
+  else if(ch==='P'){ const h=o.icon? s : s*2, top=o.icon? y : y-s; const w=o.icon? s*.8 : s; const xx=o.icon? x+s*.1 : x;
+    g.fillStyle=C.ink; g.fillRect(xx+w*.3,top+h*.82,w*.14,h*.18); g.fillRect(xx+w*.56,top+h*.82,w*.14,h*.18);
+    g.fillStyle=C.lingon; A.rr(g,xx+w*.2,top+h*.38,w*.6,h*.46,w*.16); g.fill();
+    g.fillStyle='#fff'; g.strokeStyle=C.ink; g.lineWidth=1.5; g.beginPath(); g.arc(xx+w*.5,top+h*.24,w*.22,0,7); g.fill(); g.stroke();
+    g.fillStyle=C.mustard; g.beginPath(); g.arc(xx+w*.5,top+h*.21,w*.24,Math.PI,0); g.fill(); }
+  else if(ch==='E'){ const h=o.icon? s*.95 : s*1.85, top=o.icon? y+s*.05 : y-s*.85, dx=x+s*.15, dw=s*.7;
+    g.fillStyle=C.fjord; g.beginPath(); g.moveTo(dx,top+h); g.lineTo(dx,top+dw/2); g.arc(dx+dw/2,top+dw/2,dw/2,Math.PI,0); g.lineTo(dx+dw,top+h); g.fill();
+    g.fillStyle='#fff'; g.beginPath(); g.arc(dx+dw/2,top+dw*.65,dw*.16,0,7); g.fill(); }
+  else if(ch==='.' && o.icon){ g.strokeStyle=C.lingon; g.lineWidth=2.5; g.beginPath(); g.moveTo(x+s*.25,y+s*.25); g.lineTo(x+s*.75,y+s*.75); g.moveTo(x+s*.75,y+s*.25); g.lineTo(x+s*.25,y+s*.75); g.stroke(); }
+}
+function drawGuardIcon(g,x,y,s){ g.fillStyle=C.bg; g.fillRect(x,y,s,s); g.fillStyle='#8A5AA8'; A.rr(g,x+s*.2,y+s*.1,s*.6,s*.8,s*.28); g.fill();
+  g.fillStyle='#fff'; g.beginPath(); g.arc(x+s*.58,y+s*.38,s*.1,0,7); g.fill(); g.fillStyle=C.ink; g.beginPath(); g.arc(x+s*.62,y+s*.38,s*.05,0,7); g.fill(); }
+let dragGuard=null, hover=null;
+const chAt=(r,c)=> (r<0||r>=ROWS||c<0||c>=COLS)? '#' : L.map[r][c];
+const solPiece=k=>L.sol[k]? Object.assign({},L.pieces[k],{r:L.sol[k].r,c:L.sol[k].c}) : null;
+const otherSols=k=>L.sol.map((q,j)=>j!==k? solPiece(j) : null).filter(Boolean);
+function draw(){
+  if(!L) return;
+  const g=ctx; g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle=C.bg; g.fillRect(0,0,ts*COLS,ts*ROWS);
+  g.strokeStyle='rgba(44,58,65,.10)'; g.lineWidth=1; g.beginPath();
+  for(let c=1;c<COLS;c++){ g.moveTo(c*ts+.5,0); g.lineTo(c*ts+.5,ts*ROWS); }
+  for(let r=1;r<ROWS;r++){ g.moveTo(0,r*ts+.5); g.lineTo(ts*COLS,r*ts+.5); }
+  g.stroke();
+  const late=[], water=[];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){ const ch=L.map[r][c]; if(ch==='.') continue;
+    if(ch==='P'||ch==='E'||ch==='k') late.push([ch,r,c]);
+    else if(ch==='w') water.push([r,c]);
+    else drawCell(g,ch,c*ts,r*ts,ts,{r, full:'=#'.includes(chAt(r+1,c)), covered:'=#'.includes(chAt(r-1,c)), top:chAt(r-1,c)!=='H', seed:A.hash(r,c)}); }
+  for(const [r,c] of water) drawCell(g,'w',c*ts,r*ts,ts,{surface:chAt(r-1,c)!=='w'});
+  // vartijat
+  const gs=L.guards.slice(); if(dragGuard) gs.push(dragGuard);
+  gs.forEach(G=>{
+    const a=Math.min(G.c0,G.c1), b=Math.max(G.c0,G.c1), y=G.r*ts+ts/2;
+    g.strokeStyle='#8A5AA8'; g.lineWidth=2; g.setLineDash([5,4]); g.beginPath(); g.moveTo(a*ts+ts/2,y); g.lineTo(b*ts+ts/2,y); g.stroke(); g.setLineDash([]);
+    const sc = G.dir>0? a : b; const x=sc*ts;
+    g.fillStyle='#8A5AA8'; g.globalAlpha= G===dragGuard? .6 : .9; A.rr(g,x+ts*.1,(G.r-1)*ts+ts*.5,ts*.8,ts*1.5,ts*.35); g.fill(); g.globalAlpha=1;
+    g.fillStyle='#fff'; const cx=x+ts/2, cy=G.r*ts+ts*.2, d=G.dir; g.beginPath(); g.moveTo(cx-d*ts*.18,cy-ts*.16); g.lineTo(cx+d*ts*.2,cy); g.lineTo(cx-d*ts*.18,cy+ts*.16); g.fill();
+  });
+  late.forEach(([ch,r,c])=>drawCell(g,ch,c*ts,r*ts,ts));
+  // ratkaisupaikat
+  L.pieces.forEach((p,k)=>{ const sp=solPiece(k); if(!sp) return;
+    const lv=exportLevel(), ok=freeFor(lv,sp,otherSols(k)), col= ok? PCOL[p.el] : C.lingon;
+    g.globalAlpha=.7;
+    if(p.el==='earth') for(const [r,c] of pieceCells(sp)) A.earth(g,c*ts,r*ts,ts,{mine:true,seed:.3});
+    else if(p.el==='fire') A.flame(g,sp.c*ts,sp.r*ts,ts,0,.4,.9);
+    else if(p.el==='wind') for(const [r,c] of pieceCells(sp)) A.wind(g,c*ts,r*ts,ts,p.dir*(p.strong?2:1),0,A.hash(r,c));
+    else if(p.el==='water'){ const cells=waterPreview(lv,sp,otherSols(k)); const set=new Set(cells);
+      for(const i of cells){ const r=(i/COLS)|0, c=i%COLS; A.water(g,c*ts,r*ts,ts,{surface:!set.has(i-COLS),alpha:.45}); } }
+    g.globalAlpha=1;
+    g.strokeStyle=col; g.lineWidth=2.5; g.setLineDash([5,3]);
+    if(p.el==='earth') A.rr(g,sp.c*ts+1,sp.r*ts+1,p.len*ts-2,ts-2,5);
+    else if(p.el==='wind'){ A.rr(g,sp.c*ts+1,(sp.r-WIND_H+1)*ts+1,p.len*ts-2,WIND_H*ts-2,6); }
+    else A.rr(g,sp.c*ts+1,sp.r*ts+1,ts-2,ts-2,5);
+    g.stroke(); g.setLineDash([]);
+    if(p.el==='wind') for(let r=sp.r-WIND_H+1;r<=sp.r;r+=2) windArrow(g,(sp.c+p.len/2-.5)*ts,r*ts,ts,p.dir*(p.strong?2:1));
+    if(p.el==='water'){ g.save(); g.translate(sp.c*ts,sp.r*ts); A.icon(g,'water',ts,ts,{}); g.restore(); }
+  });
+  // osoitin
+  if(hover){ g.strokeStyle=C.fjord; g.lineWidth=2;
+    const p= solK>=0? L.pieces[solK] : null;
+    if(p && p.el==='earth') g.strokeRect(hover.c*ts+1,hover.r*ts+1,p.len*ts-2,ts-2);
+    else if(p && p.el==='wind') g.strokeRect(hover.c*ts+1,(hover.r-WIND_H+1)*ts+1,p.len*ts-2,WIND_H*ts-2);
+    else g.strokeRect(hover.c*ts+1,hover.r*ts+1,ts-2,ts-2); }
+}
+
+// ---------- maalaus ----------
+let painting=false;
+function cellAt(e){ const b=cv.getBoundingClientRect(); const c=Math.floor((e.clientX-b.left)/b.width*COLS), r=Math.floor((e.clientY-b.top)/b.height*ROWS);
+  return (r<0||r>=ROWS||c<0||c>=COLS)? null : {r,c}; }
+function paint(p){
+  if(!p) return;
+  const edge = p.r===0||p.r===ROWS-1||p.c===0||p.c===COLS-1;
+  if(edge && 'PEkG<>[]w'.includes(tool)){ toast(T('ed.edgeOnly')); return; }
+  const cur=L.map[p.r][p.c];
+  if(tool==='P'||tool==='E'){ L.map=L.map.map(row=>row.split(tool).join('.')); }
+  if(cur===tool) return;
+  L.map=setCh(L.map,p.r,p.c,tool);
+  if(tool==='.'){ L.guards=L.guards.filter(G=>!(p.r>=G.r-1&&p.r<=G.r && p.c>=Math.min(G.c0,G.c1) && p.c<=Math.max(G.c0,G.c1))); renderGuards(); }
+  changed();
+}
+cv.addEventListener('pointerdown',e=>{
+  e.preventDefault(); cv.setPointerCapture(e.pointerId); const p=cellAt(e); if(!p) return;
+  if(solK>=0){ placeSol(p); return; }
+  if(tool==='G'){ dragGuard={r:p.r,c0:p.c,c1:p.c,dir:1,start:p.c}; draw(); return; }
+  painting=true; paint(p);
+});
+cv.addEventListener('pointermove',e=>{
+  const p=cellAt(e); hover=p; $('coord').textContent=p? T('ed.coord',{r:p.r,c:p.c}) : '';
+  if(dragGuard && p){ dragGuard.c0=Math.min(dragGuard.start,p.c); dragGuard.c1=Math.max(dragGuard.start,p.c); dragGuard.dir = p.c<dragGuard.start? -1 : 1; }
+  else if(painting && p && tool!=='P' && tool!=='E') paint(p);
+  draw();
+});
+function endPtr(){
+  painting=false;
+  if(dragGuard){ const G=dragGuard; dragGuard=null;
+    if(G.c1>G.c0){ L.guards.push({r:G.r,c0:G.c0,c1:G.c1,dir:G.dir}); renderGuards(); changed(); }
+    else { toast(T('ed.guardShort')); draw(); } }
+}
+cv.addEventListener('pointerup',endPtr); cv.addEventListener('pointercancel',endPtr);
+cv.addEventListener('pointerleave',()=>{ hover=null; $('coord').textContent=''; draw(); });
+
+function placeSol(p){
+  const k=solK, P=L.pieces[k];
+  let r=p.r, c=p.c;
+  if(P.el==='earth'||P.el==='wind') c=Math.min(c, COLS-P.len);
+  if(P.el==='wind') r=Math.max(WIND_H,r);
+  if(!freeFor(exportLevel(),Object.assign({},P,{r,c}),otherSols(k))){ toast(T('ed.noFitSol')); return; }
+  L.sol[k]={r,c}; solK=-1; updateTools(); renderPieces(); changed();
+}
+
+// ---------- elementit ja vartijat ----------
+function renderPieces(){
+  const el=$('pieces'); el.innerHTML='';
+  ELEMENTS.forEach(name=>{
+    const k=L.pieces.findIndex(p=>p.el===name), p=k>=0? L.pieces[k] : null;
+    const d=document.createElement('div'); d.className='elrow'+(p?'':' off');
+    let opts='';
+    if(p && p.el==='earth') opts=`<label>${T('ed.size')} <select data-f="len">${[1,2,3,4].map(n=>`<option ${p.len===n?'selected':''}>${n}</option>`).join('')}</select></label>`;
+    if(p && p.el==='wind') opts=`<label>${T('ed.size')} <select data-f="len">${[2,3,4,5,6,7,8].map(n=>`<option ${p.len===n?'selected':''}>${n}</option>`).join('')}</select></label>
+      <label>${T('ed.dir')} <select data-f="dir"><option value="1" ${p.dir>0?'selected':''}>→</option><option value="-1" ${p.dir<0?'selected':''}>←</option></select></label>
+      <label><input type="checkbox" data-f="strong" ${p.strong?'checked':''}> ${T('ed.strong')}</label>`;
+    if(p && p.el==='water') opts=`<label>${T('ed.amount')} <select data-f="len">${WATER_AMOUNTS.map(n=>`<option ${p.len===n?'selected':''}>${n}</option>`).join('')}</select></label>`;
+    d.innerHTML=`<div class="top"><canvas width="60" height="40"></canvas><label><input type="checkbox" data-f="on" ${p?'checked':''}> ${elName(name)}</label>
+      ${p? `<button class="${solK===k?'on':''}" title="${T('ed.solTitle')}">${L.sol[k]?T('ed.solMove'):T('ed.solBtn')}</button>` : ''}</div>
+      ${opts? `<div class="opts">${opts}</div>` : ''}`;
+    A.icon(d.querySelector('canvas').getContext('2d'),name,60,40,{dir:p&&p.dir,strong:p&&p.strong,dim:!p});
+    d.querySelector('[data-f=on]').onchange=e=>{
+      if(e.target.checked){ L.pieces.push({...DEFAULTS[name]}); L.sol.push(null); Object.assign(L,normalize(L)); }
+      else { L.pieces.splice(k,1); L.sol.splice(k,1); }
+      solK=-1; renderPieces(); changed(); };
+    d.querySelectorAll('select[data-f]').forEach(s=>s.onchange=()=>{ const f=s.dataset.f; p[f]=+s.value;
+      if(L.sol[k] && (p.el==='earth'||p.el==='wind') && L.sol[k].c+p.len>COLS) L.sol[k]=null; renderPieces(); changed(); });
+    const sc=d.querySelector('input[data-f=strong]'); if(sc) sc.onchange=()=>{ p.strong=sc.checked; renderPieces(); changed(); };
+    const b=d.querySelector('.top button'); if(b) b.onclick=()=>{ solK = solK===k? -1 : k; updateTools(); renderPieces(); if(solK>=0) toast(T('ed.tapSpot',{n:elName(name)})); };
+    el.appendChild(d);
+  });
+}
+function renderGuards(){
+  const el=$('guards'); el.innerHTML='';
+  if(!L.guards.length){ el.innerHTML='<p class="small">'+T('ed.noGuards')+'</p>'; return; }
+  L.guards.forEach((G,i)=>{ const d=document.createElement('div'); d.className='guard';
+    d.innerHTML=`<span>${T('ed.guardRow',{r:G.r,c0:G.c0,c1:G.c1,d:G.dir>0?'→':'←'})}</span><button>${T('ed.delGuard')}</button>`;
+    d.querySelector('button').onclick=()=>{ L.guards.splice(i,1); renderGuards(); changed(); };
+    el.appendChild(d); });
+}
+
+// ---------- yleiset ----------
+function toast(t){ const el=$('toast'); el.textContent=t; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true,2200); }
+function esc(s){ return String(s).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+function modal(html){ const o=$('overlay'); o.innerHTML='<div class="card">'+html+'</div>'; o.hidden=false; o.onclick=e=>{ if(e.target===o) closeModal(); }; return o; }
+function closeModal(){ $('overlay').hidden=true; $('overlay').innerHTML=''; }
+function load(o){ L=normalize(o); $('name').value=L.name; $('hint').value=L.hint||''; solK=-1; renderPieces(); renderGuards(); updateTools(); clearResults(); store.set('tme-editor-draft',L); draw(); }
+$('name').oninput=()=>{ L.name=$('name').value; store.set('tme-editor-draft',L); };
+$('hint').oninput=()=>{ L.hint=$('hint').value; store.set('tme-editor-draft',L); };
+
+function problems(){
+  const m=L.map.join(''); const out=[];
+  if(!m.includes('P')) out.push(T('ed.p.noStart'));
+  if(!m.includes('E')) out.push(T('ed.p.noExit'));
+  const at=ch=>{ for(let r=0;r<ROWS;r++){ const c=L.map[r].indexOf(ch); if(c>=0) return {r,c}; } return null; };
+  for(const [ch,nm] of [['P',T('ed.start')],['E',T('ed.door')]]){ const q=at(ch);
+    if(q && (q.r===0||q.r===ROWS-1||q.c===0||q.c===COLS-1)) out.push(T('ed.p.edge',{what:nm,r:q.r,c:q.c})); }
+  return out;
+}
+
+$('newBtn').onclick=()=>{
+  const o=modal(`<h3>${T('ed.newTitle')}</h3><p class="small">${T('ed.newText')}</p><div class="rowb"><button id="mC">${T('ed.cancel')}</button><button id="mOk" class="primary">${T('ed.blank')}</button></div>`);
+  o.querySelector('#mC').onclick=closeModal; o.querySelector('#mOk').onclick=()=>{ load(blank()); closeModal(); };
+};
+$('openBtn').onclick=()=>{
+  const own=store.get('tme-custom-levels',[]);
+  const o=modal(`<h3>${T('ed.openTitle')}</h3>
+    <h4>${T('ed.ownLevels')}</h4><div class="list" id="ownL">${own.length? own.map((x,i)=>`<span class="item"><button data-o="${i}">${esc(x.name)}</button><button class="del" data-d="${i}" aria-label="${esc(T('ed.delAria',{name:x.name}))}">✕</button></span>`).join('') : '<p class="small">'+T('ed.noOwn')+'</p>'}</div>
+    <h4>${T('ed.gameLevels')}</h4><div class="list">${LEVELS.map((x,i)=>`<button data-b="${i}">${i+1}. ${esc(LT(x,'name'))}</button>`).join('')}</div>
+    <div class="rowb"><button id="mC">${T('close')}</button></div>`);
+  o.querySelector('#mC').onclick=closeModal;
+  o.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{ load(own[+b.dataset.o]); closeModal(); toast(T('ed.opened',{name:own[+b.dataset.o].name})); });
+  o.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{ const x=clone(LEVELS[+b.dataset.b]); x.name=x.name+T('ed.copy'); if(x.en) x.en=Object.assign({},x.en,{name:x.en.name+T('ed.copy')}); load(x); closeModal(); });
+  o.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.d; const nm=own[i].name;
+    b.parentElement.innerHTML=`<button class="del" data-y="${i}">${esc(T('ed.deleteQ',{name:nm}))}</button>`;
+    o.querySelector(`[data-y="${i}"]`).onclick=()=>{ own.splice(i,1); store.set('tme-custom-levels',own); toast(T('ed.deleted',{name:nm})); closeModal(); $('openBtn').onclick(); }; });
+};
+$('saveBtn').onclick=()=>{
+  const x=exportLevel(); const own=store.get('tme-custom-levels',[]);
+  const i=own.findIndex(o=>o.name===x.name);
+  if(i>=0) own[i]=x; else own.push(x);
+  if(store.set('tme-custom-levels',own)) toast(T(i>=0? 'ed.savedOver' : 'ed.saved')); else toast(T('ed.saveFail'));
+};
+$('testBtn').onclick=()=>{
+  const p=problems(); if(p.length){ toast(p[0]); return; }
+  if(!store.set('tme-editor-test',exportLevel())){ toast(T('ed.testFail')); return; }
+  location.href='index.html#testi';
+};
+$('textBtn').onclick=()=>{
+  const txt=JSON.stringify(exportLevel(),null,1).replace(/\n\s*("[#=\-Hw<>\[\]^kEP.]{28}")/g,'\n  $1').replace(/\{\n\s*"(r|el)"/g,'{"$1"').replace(/,\n\s*"(c|len|dir|strong)"/g,', "$1"').replace(/\n\s*\}/g,'}');
+  const o=modal(`<h3>${T('ed.textTitle')}</h3><p class="small">${T('ed.textHelp')}</p>
+    <textarea id="tx" spellcheck="false"></textarea><div class="rowb"><button id="mC">${T('close')}</button><button id="mImp">${T('ed.import')}</button><button id="mCopy" class="primary">${T('ed.copyBtn')}</button></div>`);
+  const ta=o.querySelector('#tx'); ta.value=txt;
+  o.querySelector('#mC').onclick=closeModal;
+  o.querySelector('#mCopy').onclick=()=>{ const done=()=>toast(T('ed.copied')); const fb=()=>{ ta.focus(); ta.select(); toast(T('ed.selected')); };
+    try{ navigator.clipboard.writeText(ta.value).then(done,fb); }catch(e){ fb(); } };
+  o.querySelector('#mImp').onclick=()=>{ try{ let x=JSON.parse(ta.value); if(Array.isArray(x)) x=x[0];
+      if(!x || !Array.isArray(x.map) || x.map.length!==ROWS || x.map.some(r=>r.length!==COLS) || !Array.isArray(x.pieces)) throw new Error(T('ed.sizeErr'));
+      load(x); closeModal(); toast(T('ed.imported')); }catch(e){ toast(T('ed.importFail',{msg:e.message})); } };
+};
+
+// ---------- tarkistus ----------
+let worker=null;
+function clearResults(){ if(worker){ worker.terminate(); worker=null; $('checkBtn').disabled=false; } $('results').innerHTML='<p class="small">'+T('ed.notChecked')+'</p>'; }
+function row(cls,mark,text){ return `<div class="row ${cls}"><span class="mark">${mark}</span><span>${text}</span></div>`; }
+$('checkBtn').onclick=()=>{
+  const p=problems(); if(p.length){ $('results').innerHTML=p.map(t=>row('bad','✕',t)).join(''); return; }
+  if(!L.pieces.length){ $('results').innerHTML=row('warn','!',T('ed.r.noPieces')); return; }
+  clearResults();
+  const lvl=exportLevel(), alt=$('altChk').checked, names=lvl.pieces.map(q=>elName(q.el));
+  $('results').innerHTML=row('warn','…',T('ed.checking')); $('checkBtn').disabled=true;
+  try{ worker=new Worker('js/solver-worker.js'); }catch(e){ $('results').innerHTML=row('bad','✕',T('ed.noWorker')); $('checkBtn').disabled=false; return; }
+  const t0=Date.now();
+  worker.onmessage=e=>{
+    const m=e.data;
+    if(m.progress){ const v=Object.assign({},m.progress.vars); if(v.n && m.progress.key==='pr.drop') v.n=names[v.n-1]; $('results').innerHTML=row('warn','…',esc(T(m.progress.key,v))); return; }
+    $('checkBtn').disabled=false; worker.terminate(); worker=null;
+    if(m.error){ $('results').innerHTML=row('bad','✕',esc(T('ed.error',{msg:m.error}))); return; }
+    const r=m.res, out=[];
+    const yn=(v,good,txtT,txtF,txtN)=> v===null? row('warn','?',txtN) : (v===good? row('good','✓',v?txtT:txtF) : row('bad','✕',v?txtT:txtF));
+    out.push(yn(r.none,false,T('ed.r.noneT'),T('ed.r.noneF'),T('ed.r.noneN')));
+    if(r.missingSol) out.push(row('warn','!',T('ed.r.noSol')));
+    else out.push(yn(r.intended,true,T('ed.r.solT'),T('ed.r.solF'),T('ed.r.solN')));
+    if(r.dropOne) r.dropOne.forEach((v,k)=>out.push(yn(v,false,T('ed.r.dropT',{n:names[k]}),T('ed.r.dropF',{n:names[k]}),T('ed.r.dropN',{n:names[k]}))));
+    if(r.alternatives) out.push(row('warn','#',T('ed.r.alt',{n:r.alternatives.count})));
+    out.push(`<p class="small">${T('ed.r.time',{s:((Date.now()-t0)/1000).toFixed(1)})}</p>`);
+    $('results').innerHTML=out.join('');
+  };
+  worker.postMessage({level:lvl, opts:{alternatives:alt, limit:400000}});
+};
+
+// ---------- käynnistys ----------
+applyI18n();
+langButton($('langBtn'),()=>{ renderPieces(); renderGuards(); if(!worker && $('results').querySelector('.row')==null) clearResults(); });
+buildTools();
+const draft=store.get('tme-editor-draft',null);
+load(draft && Array.isArray(draft.map) && draft.map.length===ROWS ? draft : blank());
+addEventListener('resize',resize); new ResizeObserver(resize).observe($('stage')); resize();
+})();
+</script>
+</body>
+</html>

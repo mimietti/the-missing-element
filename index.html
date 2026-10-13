@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Missing Element">
+<meta name="theme-color" content="#F4F1EA">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>The Missing Element</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen game. Top bar (level + element buttons), board fills the middle, touch controls along the bottom. */
+:root{
+  --birch:#E8EBE6;   /* page ground */
+  --paper:#F6F6F2;   /* buttons, cards */
+  --ink:#2C3A41;     /* text */
+  --fjord:#3D6F79;   /* accent */
+  --lingon:#BE4A3F;  /* danger */
+  --mustard:#D8A73A; /* the player's element */
+  --mute:#7C878A;
+  --line:#D3D8D2;
+  --f-display:'Jost','Futura','Avenir Next','Century Gothic',system-ui,sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%;margin:0}
+body{font-size:14px;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--birch);color:var(--ink);font-family:var(--f-display);margin:0;overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none}
+.app{height:100%;display:flex;flex-direction:column;gap:10px;padding-block:10px;padding-inline:16px;box-sizing:border-box;max-width:1200px;margin:0 auto}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.lvl{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;row-gap:2px;min-width:0;flex:1}
+.lvl .num{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.lvl h1{font-size:22px;font-weight:500;margin:0;white-space:nowrap}
+.lvl .hint{flex-basis:100%;font-size:15px;line-height:1.3;color:var(--mute);min-width:0;text-wrap:pretty}
+.lvl .hint:empty{display:none}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button{font-family:inherit;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:12px;
+  font-size:16px;padding:10px 14px;cursor:pointer;touch-action:none}
+button:focus-visible{outline:3px solid var(--fjord);outline-offset:2px}
+button:disabled{opacity:.4}
+.tray{display:flex;gap:6px;align-items:center}
+.el{display:flex;flex-direction:column;align-items:center;gap:1px;border-color:var(--mustard);border-width:2px;padding:5px 8px;min-width:64px}
+.el canvas{width:40px;height:24px}
+.el .lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.el.placed{border-color:var(--line);background:transparent}
+.el.active{background:var(--mustard);border-color:var(--mustard);color:#fff}
+.el.na{border-style:dashed;border-color:var(--line)}
+.el.na:disabled{opacity:.45}
+.flag{padding:8px 10px;line-height:0}
+.flag svg{display:block;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.keys{font-size:14px;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative}
+#board{display:block;border-radius:6px;box-shadow:0 0 0 1.5px rgba(44,58,65,.12)}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.card{pointer-events:auto;background:var(--paper);border-radius:16px;padding:22px 26px;box-shadow:0 10px 40px rgba(44,58,65,.18);
+  display:flex;flex-direction:column;gap:14px;align-items:flex-start;max-width:min(440px,90%)}
+.card h2{margin:0;font-size:26px;font-weight:500;text-wrap:balance}
+.card p{margin:0;color:var(--mute);font-size:16px;line-height:1.45}
+.card .row{display:flex;gap:10px;flex-wrap:wrap}
+.primary{background:var(--fjord);border-color:var(--fjord);color:#fff}
+.toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);
+  padding:8px 16px;border-radius:999px;font-size:15px;pointer-events:none;white-space:nowrap}
+.levels{display:grid;grid-template-columns:repeat(4,64px);gap:8px}
+.levels button{height:56px;font-size:18px;font-variant-numeric:tabular-nums}
+.card h3{margin:4px 0 0;font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.ownlist{display:flex;flex-wrap:wrap;gap:8px;max-width:100%}
+.ownlist button{font-size:15px}
+.btnlink{font-family:inherit;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:12px;font-size:16px;padding:10px 14px;text-decoration:none}
+.levels button.done{border-color:var(--fjord);color:var(--fjord)}
+.controls{display:flex;justify-content:space-between;align-items:stretch;gap:12px;padding-bottom:env(safe-area-inset-bottom,0px)}
+.pad{display:flex;gap:12px}
+.ctl{width:min(110px,22vw);height:min(84px,13vh);min-height:52px;border-radius:18px;font-size:28px;background:var(--paper);display:flex;align-items:center;justify-content:center}
+.ctl.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.ctl.jump{width:min(200px,34vw);font-size:18px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+.placebar{display:flex;gap:10px;align-items:center;flex:1;justify-content:center;flex-wrap:wrap}
+.placebar .msg{font-size:16px;color:var(--mute)}
+@media (max-height:520px){ .lvl .hint{font-size:13px} .app{gap:6px;padding-block:6px} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <header>
+    <div class="lvl"><span class="num" id="lnum"></span><h1 id="lname"></h1><span class="hint" id="lhint"></span></div>
+    <div class="tools">
+      <span class="keys" id="keys"></span>
+      <div class="tray" id="tray"></div>
+      <button id="restartBtn" data-i18n-aria="restart">↻</button>
+      <button id="fsBtn" data-i18n-aria="fullscreen">⛶</button>
+      <button id="langBtn" class="flag"></button>
+      <button id="menuBtn" data-i18n="menu">Levels</button>
+    </div>
+  </header>
+  <div class="stage" id="stage">
+    <canvas id="board"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+    <div class="toast" id="toast" hidden></div>
+  </div>
+  <div class="controls" id="controls">
+    <div class="pad" id="movePad">
+      <button class="ctl" id="bL" data-i18n-aria="left">◀</button>
+      <button class="ctl" id="bR" data-i18n-aria="right">▶</button>
+    </div>
+    <div class="placebar" id="placeBar" hidden>
+      <span class="msg" id="placeMsg"></span>
+      <button id="removeBtn" hidden data-i18n="place.remove">Remove</button>
+      <button id="cancelBtn" data-i18n="place.cancel">Cancel</button>
+      <button id="placeBtn" class="primary" data-i18n="place.ok">Place</button>
+    </div>
+    <button class="ctl jump" id="bJ" data-i18n="jump">Jump</button>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/art.js"></script>
+<script src="js/levels.js"></script>
+<script>
+(()=>{
+const {U,COLS,ROWS,MAXFALL,BURN,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,ELEMENTS,
+  makeWorld,newState,step,freeFor,guardPos,pieceCells,waterPreview,burnable}=PPEngine;
+const $=id=>document.getElementById(id);
+const board=$('board'), ctx=board.getContext('2d');
+const A=ART, C=ART.C;
+const KEYC=['#D9A12A','#3D6F79','#BE4A3F','#6F8F45'];
+const GUARDC=['#8A5AA8','#BE4A3F','#2F5FA8','#D9893A'];
+const elName=el=>T('el.'+el);
+
+const TICK=50;
+const UNLOCK_ALL=true;   // testivaihe: kaikki kentät valittavissa
+
+// kenttälista: valmiit + editorissa tallennetut, tai editorin testikenttä (#testi)
+const TEST = location.hash==='#testi';
+let CUSTOM=[]; try{ CUSTOM=JSON.parse(localStorage.getItem('tme-custom-levels')||'[]')||[]; }catch(e){}
+let GL;
+if(TEST){ let tl=null; try{ tl=JSON.parse(localStorage.getItem('tme-editor-test')||'null'); }catch(e){} GL=[tl||LEVELS[0]]; }
+else GL = LEVELS.concat(CUSTOM.map(c=>Object.assign({},c,{custom:true})));
+const NBUILT = TEST? 0 : LEVELS.length;
+const levelKey = d => (TEST?'testi:':d.custom?'oma:':'')+d.name;
+let progress=0, saved={};
+try{ progress=+localStorage.getItem('tme-progress')||0; saved=JSON.parse(localStorage.getItem('tme-pieces')||'{}')||{}; }catch(e){}
+function persist(){ try{ if(!TEST) localStorage.setItem('tme-progress',String(progress)); saved[levelKey(def)]=placed; localStorage.setItem('tme-pieces',JSON.stringify(saved)); }catch(e){} }
+
+let li=0, def, world, st, prev, placed=[], fireT0={}, mode='play', edit=null, deadT=0, frame=0;
+const held={L:false,R:false,J:false}; let jumpLatch=false;
+
+const samePiece=(a,b)=>a.el===b.el && (a.len||0)===(b.len||0) && (a.dir||0)===(b.dir||0) && !!a.strong===!!b.strong;
+function loadLevel(i){
+  li=i; def=GL[i];
+  const sv=saved[levelKey(def)];
+  placed = (sv && sv.length===def.pieces.length) ? sv.map(p=>p&&{...p}) : def.pieces.map(()=>null);
+  // hylkää tallennetut, jotka eivät enää sovi päivitettyyn kenttään
+  placed = placed.map((p,k)=> p && samePiece(p,def.pieces[k]) && freeFor(def,p,placed.filter((q,j)=>j!==k)) ? p : null);
+  edit=null; buildTray(); restart();
+  headerTexts();
+}
+function headerTexts(){
+  $('lnum').textContent = TEST? T('lvl.test') : def.custom? T('lvl.own') : T('lvl.num',{n:li+1,total:NBUILT});
+  $('lname').textContent=LT(def,'name'); $('lhint').textContent=LT(def,'hint');
+}
+// tuli syttyy asetushetkellä; alusta aloitettaessa heti
+const worldPieces=()=>placed.map((p,k)=> p && (p.el==='fire'? {...p,t0:fireT0[k]||0} : p));
+function restart(){
+  landAt=jumpAt=-1e9; exitT=-1; fireT0={};
+  world=makeWorld(def,worldPieces()); st=newState(world); prev={x:st.x,y:st.y};
+  mode='play'; deadT=0; edit=null; hideOverlay(); setPlaceUI(false); updateTray(); updateKeys();
+}
+function rebuildWorld(){ world=makeWorld(def,worldPieces()); }
+function updateKeys(){ const n=world.keys.length, got=world.keys.filter((_,i)=>st.keys>>i&1).length; $('keys').textContent = n? T('keys',{got,n}) : ''; }
+
+// ---------- elementtinapit: aina neljä, tarjolla olevat käytettävissä ----------
+const slotOf = el => def.pieces.findIndex(p=>p.el===el);
+function buildTray(){
+  const tr=$('tray'); tr.innerHTML='';
+  ELEMENTS.forEach(el=>{
+    const b=document.createElement('button'); b.className='el'; b.dataset.el=el;
+    b.innerHTML='<canvas width="80" height="48"></canvas><span class="lbl"></span>';
+    b.addEventListener('click',()=>{ const k=slotOf(el); if(k<0) return; if(edit&&edit.k===k) cancelPlace(); else startPlace(k); });
+    tr.appendChild(b);
+  });
+  updateTray();
+}
+function updateTray(){
+  [...$('tray').children].forEach(b=>{
+    const el=b.dataset.el, k=slotOf(el), on=k>=0;
+    b.classList.toggle('na',!on); b.classList.toggle('placed',on&&!!placed[k]); b.classList.toggle('active',on&&!!edit&&edit.k===k);
+    b.disabled = !on || mode==='won'||mode==='menu'||mode==='exiting';
+    b.querySelector('.lbl').textContent=elName(el)+(on&&placed[k]? T('piece.move') : '');
+    b.setAttribute('aria-label', on? T(placed[k]?'aria.movePiece':'aria.addPiece')+elName(el) : elName(el)+': '+T('el.na'));
+    const p=on? def.pieces[k] : {};
+    const cv=b.querySelector('canvas'); A.icon(cv.getContext('2d'),el,cv.width,cv.height,{dir:p.dir,strong:p.strong,frame:900});
+  });
+}
+
+// ---------- asettaminen ----------
+function setPlaceUI(on){
+  $('placeBar').hidden=!on; $('movePad').style.visibility=on?'hidden':''; $('bJ').style.visibility=on?'hidden':'';
+  $('removeBtn').hidden=!(on && edit && placed[edit.k]);
+}
+function startPlace(k){
+  if(mode!=='play' && mode!=='place') return;
+  const p=def.pieces[k], pr=Math.max(3,Math.min(ROWS-2,(st.y>>2)-1));
+  const w=(p.el==='earth'||p.el==='wind')? p.len : 1;
+  const g = placed[k]? {...placed[k]} : {...p, r: p.el==='water'? 2 : pr, c: Math.floor((COLS-w)/2)};
+  edit={k,g,preview:[]}; mode='place'; setPlaceUI(true); updateTray(); validate();
+}
+const others=()=>placed.filter((_,j)=>j!==edit.k);
+function ghostValid(){
+  if(!edit) return false; const g=edit.g;
+  if(!freeFor(def,g,others())) return false;
+  if(g.el==='earth'||g.el==='fire'){
+    const moving=!!placed[edit.k], px=moving? world.start.x : st.x, py=moving? world.start.y : st.y;
+    const bx0=px>>2, bx1=(px+U-1)>>2, br0=Math.floor((py-8)/U), br1=Math.floor((py-1)/U);
+    for(const [r,c] of pieceCells(g)) if(c>=bx0&&c<=bx1&&r>=br0&&r<=br1) return false;
+  }
+  return true;
+}
+function validate(){
+  edit.preview = edit.g.el==='water'? waterPreview(def,edit.g,others()) : [];
+  const ok=ghostValid(); $('placeBtn').disabled=!ok;
+  $('placeMsg').textContent= T(!ok? 'place.nofit' : placed[edit.k]? 'place.moveWarn' : edit.g.el==='water'? 'place.pour' : 'place.drag');
+}
+function commitPlace(){ if(!ghostValid()) return; const k=edit.k, moved=!!placed[k];
+  placed[k]={...edit.g}; persist();
+  if(moved){ restart(); toast(T('toast.moved')); }
+  else { if(placed[k].el==='fire') fireT0[k]=st.t; rebuildWorld(); endPlace(); } }
+function removePiece(){ placed[edit.k]=null; persist(); restart(); toast(T('toast.removed')); }
+function cancelPlace(){ endPlace(); }
+function endPlace(){ edit=null; mode='play'; setPlaceUI(false); updateTray(); }
+
+let dragging=false;
+board.addEventListener('pointerdown',e=>{ if(mode!=='place') return; dragging=true; board.setPointerCapture(e.pointerId); moveGhost(e); e.preventDefault(); });
+board.addEventListener('pointermove',e=>{ if(mode==='place'&&dragging) moveGhost(e); });
+board.addEventListener('pointerup',()=>{ dragging=false; });
+board.addEventListener('pointercancel',()=>{ dragging=false; });
+function moveGhost(e){
+  const r=board.getBoundingClientRect(), fx=(e.clientX-r.left)/r.width*COLS, fy=(e.clientY-r.top)/r.height*ROWS;
+  const g=edit.g;
+  if(g.el==='earth'){ g.c=Math.max(0,Math.min(COLS-g.len,Math.round(fx-g.len/2))); g.r=Math.max(1,Math.min(ROWS-1,Math.floor(fy))); }
+  else if(g.el==='wind'){ g.c=Math.max(0,Math.min(COLS-g.len,Math.round(fx-g.len/2))); g.r=Math.max(WIND_H,Math.min(ROWS-1,Math.floor(fy)+1)); }
+  else { g.c=Math.max(0,Math.min(COLS-1,Math.floor(fx))); g.r=Math.max(1,Math.min(ROWS-1,Math.floor(fy))); }
+  validate();
+}
+
+// ---------- ohjaus ----------
+function bindHold(id,key){
+  const el=$(id);
+  const down=e=>{ e.preventDefault(); el.setPointerCapture?.(e.pointerId); held[key]=true; if(key==='J') jumpLatch=true; el.classList.add('on'); };
+  const up=()=>{ held[key]=false; el.classList.remove('on'); };
+  el.addEventListener('pointerdown',down); el.addEventListener('pointerup',up);
+  el.addEventListener('pointercancel',up); el.addEventListener('lostpointercapture',up);
+}
+bindHold('bL','L'); bindHold('bR','R'); bindHold('bJ','J');
+const tap=(id,fn)=>$(id).addEventListener('click',fn);
+if(navigator.standalone || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches) $('fsBtn').hidden=true;
+tap('fsBtn',()=>{
+  const el=document.documentElement, d=document;
+  const on = d.fullscreenElement || d.webkitFullscreenElement;
+  try{
+    if(on){ (d.exitFullscreen||d.webkitExitFullscreen).call(d); return; }
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if(!req) throw 0;
+    const p = req.call(el); if(p && p.catch) p.catch(()=>toast(T('toast.nofs')));
+  }catch(e){ toast(T('toast.nofs')); }
+});
+tap('restartBtn',restart); tap('menuBtn',showMenu);
+tap('placeBtn',commitPlace); tap('cancelBtn',cancelPlace); tap('removeBtn',removePiece);
+document.addEventListener('gesturestart',e=>e.preventDefault());
+document.addEventListener('dblclick',e=>e.preventDefault());
+const KEYS={ArrowLeft:'L',KeyA:'L',ArrowRight:'R',KeyD:'R',ArrowUp:'J',KeyW:'J',Space:'J'};
+addEventListener('keydown',e=>{
+  if(KEYS[e.code]){ e.preventDefault(); if(mode==='place') return; held[KEYS[e.code]]=true; if(KEYS[e.code]==='J') jumpLatch=true; }
+  else if(e.code==='KeyR') restart();
+  else if(e.code==='Enter' && mode==='place') commitPlace();
+  else if(e.code==='Escape' && mode==='place') cancelPlace();
+  else if(/^Digit[1-4]$/.test(e.code)){ const k=slotOf(ELEMENTS[+e.code.slice(5)-1]); if(k>=0) startPlace(k); }
+});
+addEventListener('keyup',e=>{ if(KEYS[e.code]) held[KEYS[e.code]]=false; });
+
+// ---------- kortit ----------
+function hideOverlay(){ $('overlay').hidden=true; $('overlay').innerHTML=''; }
+function showCard(html){ const o=$('overlay'); o.innerHTML='<div class="card">'+html+'</div>'; o.hidden=false; return o; }
+function toast(t){ const el=$('toast'); el.textContent=t; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true,1300); }
+function showWin(){
+  if(TEST){
+    const o=showCard(`<h2>${esc(T('win.test.title',{name:LT(def,'name')}))}</h2><p>${T('win.test.text')}</p><div class="row"><button id="again">${T('again')}</button><button id="ed" class="primary">${T('backEditor')}</button></div>`);
+    o.querySelector('#again').onclick=restart; o.querySelector('#ed').onclick=()=>{ location.href='editor.html'; };
+    return;
+  }
+  const last=li===GL.length-1;
+  const o=showCard(last
+    ? `<h2>${T('win.all.title')}</h2><p>${T('win.all.text')}</p><div class="row"><button id="again">${T('playAgain')}</button><button id="lv" class="primary">${T('menu')}</button></div>`
+    : `<h2>${esc(T('win.title',{name:LT(def,'name')}))}</h2><p>${esc(T('win.next',{name:LT(GL[li+1],'name')}))}</p><div class="row"><button id="again">${T('again')}</button><button id="next" class="primary">${T('nextLevel')}</button></div>`);
+  o.querySelector('#again').onclick=restart;
+  if(last) o.querySelector('#lv').onclick=showMenu; else o.querySelector('#next').onclick=()=>loadLevel(li+1);
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+function showMenu(){
+  if(TEST){ location.href='editor.html'; return; }
+  if(mode==='place') cancelPlace();
+  const prevMode=mode; mode='menu'; updateTray();
+  let b=''; for(let i=0;i<NBUILT;i++){ const L=GL[i]; b+=`<button data-i="${i}" ${(!UNLOCK_ALL&&i>progress)?'disabled':''} class="${i<progress?'done':''}" aria-label="${esc(LT(L,'name'))}" title="${esc(LT(L,'name'))}">${i+1}</button>`; }
+  let own=''; for(let i=NBUILT;i<GL.length;i++) own+=`<button data-i="${i}" class="own">${esc(LT(GL[i],'name'))}</button>`;
+  const o=showCard(`<h2>${T('menu.title')}</h2><p>${UNLOCK_ALL? T('menu.unlocked') : T('menu.open',{n:Math.min(progress+1,NBUILT),total:NBUILT})} ${T('menu.keep')}</p><div class="levels">${b}</div>`+
+    (own? `<h3>${T('menu.own')}</h3><div class="ownlist">${own}</div>` : '')+
+    `<div class="row"><button id="close">${T('close')}</button><a class="btnlink" href="editor.html">${T('editor')}</a></div>`);
+  o.querySelectorAll('.levels button, .ownlist button').forEach(el=>el.onclick=()=>loadLevel(+el.dataset.i));
+  o.querySelector('#close').onclick=()=>{ hideOverlay(); mode = prevMode==='menu'?'play':prevMode; updateTray(); if(mode==='won') showWin(); };
+}
+
+// ---------- silmukka ----------
+let acc=0,last=performance.now();
+let landAt=-1e9, jumpAt=-1e9, landHard=0, exitT=-1, splashAt=-1e9, splashX=0, splashY=0;
+// oven avaus: avain lentää lukkoon, kääntyy, ovi aukeaa, hahmo astuu sisään
+const EX={fly:450, turn:750, open:1150, enter:1650, end:1900};
+const clamp01=v=>Math.max(0,Math.min(1,v)), ease=v=>v<.5?2*v*v:1-Math.pow(-2*v+2,2)/2;
+function tick(){
+  prev={x:st.x,y:st.y}; const k0=st.keys, m0=st.m, pk=st.peak;
+  const dir=(held.R?1:0)-(held.L?1:0);
+  step(world,st,{dir,jump:held.J||jumpLatch}); jumpLatch=false;
+  if(m0!==0 && m0!==3 && st.m===0){ landAt=frame; landHard=Math.min(1,(st.y-pk)/MAXFALL); }
+  if(m0!==3 && st.m===3){ splashAt=frame; splashX=st.x; splashY=Math.floor((st.y-1)/U); }
+  if((m0===0||m0===3) && st.m===1){ jumpAt=frame; }
+  if(st.keys!==k0) updateKeys();
+  if(st.dead){ mode='dead'; deadT=0; toast(T('cause.'+(st.cause||'x'))); }
+  else if(st.won){ mode='exiting'; exitT=0; held.L=held.R=held.J=false; if(!TEST && !def.custom && li+1>progress) progress=li+1; persist(); updateTray(); }
+}
+function loop(now){
+  const dt=Math.min(200,now-last); last=now; frame+=dt;
+  if(mode==='play'){ acc+=dt; while(acc>=TICK && mode==='play'){ acc-=TICK; tick(); } } else acc=0;
+  if(mode==='dead'){ deadT+=dt; if(deadT>900) restart(); }
+  if(mode==='exiting'){ exitT+=dt; if(exitT>=EX.end){ mode='won'; showWin(); } }
+  draw(mode==='play'? acc/TICK : 1);
+  requestAnimationFrame(loop);
+}
+
+// ---------- koko ----------
+let ts=32, dpr=1;
+function resize(){
+  const s=$('stage').getBoundingClientRect();
+  ts=Math.max(8,Math.floor(Math.min(s.width/COLS, s.height/ROWS)));
+  dpr=window.devicePixelRatio||1;
+  board.style.width=ts*COLS+'px'; board.style.height=ts*ROWS+'px';
+  board.width=Math.round(ts*COLS*dpr); board.height=Math.round(ts*ROWS*dpr);
+}
+addEventListener('resize',resize); new ResizeObserver(resize).observe($('stage'));
+
+// ---------- piirto ----------
+const rr=(x,y,w,h,r)=>A.rr(ctx,x,y,w,h,r);
+const gAt=(r,c)=> (r<0||r>=ROWS||c<0||c>=COLS)? WALL : world.g[r*COLS+c];
+function gone(i){ return i>=0 && world.ign[i]>=0 && burnable(world.g[i]) && st.t>=world.ign[i]+BURN; }
+function charOf(i){ const g0=world.ign[i]; return (g0>=0 && st.t>=g0)? (st.t-g0)/BURN : 0; }
+function drawTiles(mine){
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const i=r*COLS+c, t=world.g[i]; if(!t||t===WATER||gone(i)) continue;
+    if(edit && placed[edit.k] && placed[edit.k].el==='earth' && pieceCells(placed[edit.k]).some(([a,b])=>a===r&&b===c)) continue;
+    const x=c*ts, y=r*ts;
+    if(t===EARTH){ const below=gAt(r+1,c), above=gAt(r-1,c);
+      A.earth(ctx,x,y,ts,{full: below===EARTH||below===WALL, covered: above===EARTH||above===WALL, mine:mine.has(i), seed:A.hash(r,c)}); }
+    else if(t===WALL) A.stone(ctx,x,y,ts,r);
+    else if(t===WOOD) A.wood(ctx,x,y,ts,{char:charOf(i)});
+    else if(t===FENCE) A.fence(ctx,x,y,ts,{char:charOf(i), top: gAt(r-1,c)!==FENCE || gone(i-COLS)});
+    else if(t===SPIKE) A.spike(ctx,x,y,ts);
+    else if(t===EXIT) drawDoor(r,c);
+  }
+}
+function drawGrass(){
+  for(let r=1;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    if(world.g[r*COLS+c]!==EARTH || world.g[(r-1)*COLS+c]!==E) continue;
+    const h=A.hash(r,c); if(h>.5) continue;
+    const v=world.wind[(r-1)*COLS+c]; A.grass(ctx,c*ts,r*ts,ts,h*2,frame, v? Math.sign(v)*(Math.abs(v)===2?1:.55) : 0);
+  }
+}
+function drawDoor(r,c){
+  const x=c*ts, y=r*ts, s=ts;
+  const open=st.keys===world.allKeys, dx=x+s*.1, dw=s*.8, dy=y-s*.85, dh=s*1.85;
+  const arch=()=>{ ctx.beginPath(); ctx.moveTo(dx,dy+dh); ctx.lineTo(dx,dy+dw/2); ctx.arc(dx+dw/2,dy+dw/2,dw/2,Math.PI,0); ctx.lineTo(dx+dw,dy+dh); ctx.closePath(); };
+  const op = exitT<0? 0 : ease(clamp01((exitT-EX.turn)/(EX.open-EX.turn)));
+  if(op>0){
+    ctx.fillStyle=C.ink; arch(); ctx.fill();
+    ctx.save(); arch(); ctx.clip();
+    ctx.fillStyle=C.fjord; ctx.fillRect(dx, dy, dw*(1-op)+.5, dh);
+    ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fillRect(dx+dw*(1-op)-2, dy, 2, dh);
+    ctx.restore();
+    ctx.strokeStyle=C.fjord; ctx.lineWidth=2; arch(); ctx.stroke();
+    return;
+  }
+  ctx.fillStyle=open? C.fjord : C.line; arch(); ctx.fill();
+  ctx.fillStyle= open? '#fff' : C.mute; ctx.beginPath(); ctx.arc(dx+dw/2,dy+dw*.6,dw*.18,0,7); ctx.fill();
+  if(open && exitT<0){ ctx.globalAlpha=.3+.3*Math.sin(frame/200); ctx.strokeStyle=KEYC[0]; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(dx+dw/2,dy+dw/2,dw/2+4,Math.PI,0); ctx.stroke(); ctx.globalAlpha=1; }
+}
+function drawKey(r,c,i){ A.key(ctx,c*ts+ts/2,r*ts+ts/2+Math.sin(frame/300+c)*ts*.06,ts,KEYC[(Math.floor(frame/180)+i)%KEYC.length]); }
+function drawGuard(G,gi){
+  const p=guardPos(G,st.t), s=ts/U, x=p.x*s, y=p.y*s, w=ts, bob=Math.abs(Math.sin(st.t*0.8))*w*.06;
+  ctx.fillStyle=GUARDC[(gi+li)%GUARDC.length];
+  rr(x+w*.08,y-w*1.5-bob,w*.84,w*1.5,w*.42); ctx.fill();
+  ctx.fillRect(x+w*.2,y-w*.2,w*.18,w*.2); ctx.fillRect(x+w*.62,y-w*.2,w*.18,w*.2);
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x+w*.5+p.d*w*.14,y-w*1.05-bob,w*.14,0,7); ctx.fill();
+  ctx.fillStyle=C.ink; ctx.beginPath(); ctx.arc(x+w*.5+p.d*w*.19,y-w*1.05-bob,w*.065,0,7); ctx.fill();
+}
+function drawPlayer(px,py){
+  const s=ts/U, x=px*s, y=py*s, w=ts, h=ts*2;
+  const swim = st.m===3;
+  const moving = mode==='play' && (held.L||held.R) && (st.m===0||swim);
+  const face = st.face||1, stp = moving? Math.floor(frame/(swim?200:120))%2 : 0;
+  let sx=1, sy=1;
+  const lt=(frame-landAt)/220; if(lt>=0&&lt<1){ const e=Math.sin(lt*Math.PI)*(1-lt*.4), k=.12+.16*landHard; sy-=k*e; sx+=k*.8*e; }
+  const jt=(frame-jumpAt)/200; if(jt>=0&&jt<1){ const e=Math.sin(jt*Math.PI); sy+=.14*e; sx-=.1*e; }
+  const bobY = swim? Math.sin(frame/260)*ts*.05 : 0;
+  ctx.save(); ctx.translate(x+w/2,y+bobY); ctx.scale(sx,sy); ctx.translate(-(x+w/2),-y);
+  const bend = (lt>=0&&lt<1)? Math.sin(lt*Math.PI)*w*.07 : 0;
+  ctx.fillStyle=C.ink; const lw=w*.16, lh=h*.18;
+  ctx.fillRect(x+w*.28-(stp?w*.06:0)-bend, y-lh, lw, lh); ctx.fillRect(x+w*.56+(stp?w*.06:0)+bend, y-lh, lw, lh);
+  ctx.fillStyle=C.lingon; rr(x+w*.18,y-h*.62,w*.64,h*.47,w*.18); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.25)'; ctx.fillRect(x+w*.3,y-h*.5,w*.4,h*.05);
+  if(swim){ // kädet melovat
+    ctx.strokeStyle=C.lingon; ctx.lineWidth=w*.12; ctx.lineCap='round'; const a=Math.sin(frame/(moving?140:400))*w*.12;
+    ctx.beginPath(); ctx.moveTo(x+w*.25,y-h*.45); ctx.lineTo(x+w*.02,y-h*.38+a); ctx.moveTo(x+w*.75,y-h*.45); ctx.lineTo(x+w*.98,y-h*.38-a); ctx.stroke(); }
+  ctx.fillStyle='#fff'; ctx.strokeStyle=C.ink; ctx.lineWidth=Math.max(1.5,w*.07);
+  ctx.beginPath(); ctx.arc(x+w*.5,y-h*.76,w*.25,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=C.mustard; ctx.beginPath(); ctx.arc(x+w*.5,y-h*.79,w*.27,Math.PI,0); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+w*.5,y-h*.93,w*.09,0,7); ctx.fill();
+  ctx.fillStyle=C.ink; ctx.beginPath(); ctx.arc(x+w*.5+face*w*.11,y-h*.73,w*.045,0,7); ctx.fill();
+  ctx.restore();
+}
+function drawWater(cells,alpha){
+  const set=new Set(cells);
+  for(const i of cells){ const r=(i/COLS)|0, c=i%COLS;
+    const wv=world.wind[i]||(r>0?world.wind[i-COLS]:0);
+    A.water(ctx,c*ts,r*ts,ts,{surface:!set.has(i-COLS), frame, wind:wv, alpha}); }
+}
+function drawFire(){
+  for(let i=0;i<world.ign.length;i++){
+    const g0=world.ign[i]; if(g0<0 || st.t<g0 || st.t>=g0+BURN) continue;
+    const r=(i/COLS)|0, c=i%COLS, t=world.g[i], p=(st.t-g0)/BURN;
+    const k = Math.min(1,(st.t-g0+1)/5) * (p>.8? (1-p)/.2*.8+.2 : 1);
+    const yy = t===WOOD? r*ts-ts*.72 : t===FENCE? r*ts : r*ts-ts*.1;
+    A.flame(ctx,c*ts,yy,ts,frame,A.hash(r,c),k);
+  }
+}
+function drawWindCells(){
+  for(let i=0;i<world.wind.length;i++){ const v=world.wind[i]; if(!v) continue; const r=(i/COLS)|0, c=i%COLS; ctx.fillStyle='rgba(111,149,161,.07)'; ctx.fillRect(c*ts,r*ts,ts,ts); A.wind(ctx,c*ts,r*ts,ts,v,frame,A.hash(r,c)); }
+}
+function draw(alpha){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle=C.bg; ctx.fillRect(0,0,ts*COLS,ts*ROWS);
+  ctx.fillStyle = mode==='place'? 'rgba(61,111,121,.35)' : 'rgba(44,58,65,.07)';
+  for(let r=1;r<ROWS;r++) for(let c=1;c<COLS;c++){ ctx.beginPath(); ctx.arc(c*ts,r*ts,mode==='place'?1.8:1.1,0,7); ctx.fill(); }
+  const mine=new Set(); placed.forEach((p,k)=>{ if(p && p.el==='earth' && !(edit&&edit.k===k)) for(const [r,c] of pieceCells(p)) mine.add(r*COLS+c); });
+  drawWindCells();
+  drawTiles(mine);
+  drawGrass();
+  world.keys.forEach((K,i)=>{ if(!(st.keys>>i&1)) drawKey(K.r,K.c,i); });
+  world.guards.forEach((G,gi)=>drawGuard(G,gi));
+  let ix=prev.x+(st.x-prev.x)*alpha, iy=prev.y+(st.y-prev.y)*alpha;
+  if(mode==='dead') ctx.globalAlpha=(Math.floor(deadT/100)%2)? .25 : 1;
+  let pa=1, ps=1;
+  if(exitT>=0){ const e=clamp01((exitT-EX.open)/(EX.enter-EX.open)); pa=1-e; ps=1-e*.35; if(world.exit) ix += (world.exit.c*U - ix)*ease(e); }
+  if(pa>0){ ctx.save(); ctx.globalAlpha*=pa;
+    if(ps<1){ const s=ts/U, fx=ix*s+ts/2, fy=iy*s; ctx.translate(fx,fy); ctx.scale(ps,ps); ctx.translate(-fx,-fy); }
+    drawPlayer(ix,iy); ctx.restore(); }
+  ctx.globalAlpha=1;
+  const hideWater = edit && placed[edit.k] && placed[edit.k].el==='water';
+  if(!hideWater){ const wc=[]; for(let i=0;i<world.g.length;i++) if(world.g[i]===WATER) wc.push(i); drawWater(wc); }
+  drawSplash();
+  drawFire();
+  if(exitT>=0 && exitT<EX.turn+80 && world.exit) drawExitKey(ix,iy);
+  if(edit) drawGhost();
+}
+function drawSplash(){
+  const t=(frame-splashAt)/500; if(t<0||t>=1) return;
+  const s=ts/U, cx=splashX*s+ts/2, cy=splashY*ts+ts*.2;
+  ctx.strokeStyle=C.waterHi; ctx.lineWidth=2; ctx.globalAlpha=1-t;
+  for(const d of [-1,1]){ ctx.beginPath(); ctx.moveTo(cx+d*ts*.2,cy); ctx.quadraticCurveTo(cx+d*ts*(.4+t*.4),cy-ts*(.6+t*.3),cx+d*ts*(.6+t*.6),cy-ts*.1+t*ts*.4); ctx.stroke(); }
+  ctx.globalAlpha=1;
+}
+function drawGhost(){
+  const g=edit.g, ok=ghostValid();
+  ctx.strokeStyle= ok? C.ink : C.lingon; ctx.lineWidth=2; ctx.setLineDash([5,4]);
+  if(g.el==='earth'){
+    ctx.globalAlpha=.8; for(const [r,c] of pieceCells(g)) A.earth(ctx,c*ts,r*ts,ts,{mine:true,seed:.3}); ctx.globalAlpha=1;
+    ctx.setLineDash([5,4]); rr(g.c*ts+1,g.r*ts+1,g.len*ts-2,ts-2,6); ctx.stroke();
+  } else if(g.el==='fire'){
+    ctx.globalAlpha=.85; A.flame(ctx,g.c*ts,g.r*ts,ts,frame,.4,.9); ctx.globalAlpha=1;
+    rr(g.c*ts+1,g.r*ts+1,ts-2,ts-2,6); ctx.stroke();
+  } else if(g.el==='wind'){
+    const v=g.dir*(g.strong?2:1);
+    for(const [r,c] of pieceCells(g)) A.wind(ctx,c*ts,r*ts,ts,v,frame,A.hash(r,c));
+    ctx.strokeStyle= ok? C.ink : C.lingon; ctx.setLineDash([5,4]);
+    rr(g.c*ts+1,(g.r-WIND_H+1)*ts+1,g.len*ts-2,WIND_H*ts-2,8); ctx.stroke();
+    ctx.setLineDash([]); const cy=(g.r-WIND_H/2+.5)*ts, x0=g.dir>0? g.c*ts+ts*.3 : (g.c+g.len)*ts-ts*.3, x1=g.dir>0? (g.c+g.len)*ts-ts*.3 : g.c*ts+ts*.3;
+    ctx.strokeStyle=ok? C.fjord : C.lingon; ctx.fillStyle=ctx.strokeStyle; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x0,cy); ctx.lineTo(x1-g.dir*ts*.2,cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1,cy); ctx.lineTo(x1-g.dir*ts*.35,cy-ts*.22); ctx.lineTo(x1-g.dir*ts*.35,cy+ts*.22); ctx.fill();
+  } else if(g.el==='water'){
+    drawWater(edit.preview,.45);
+    ctx.strokeStyle= ok? C.fjord : C.lingon; ctx.setLineDash([5,4]); rr(g.c*ts+1,g.r*ts+1,ts-2,ts-2,6); ctx.stroke(); ctx.setLineDash([]);
+    ctx.save(); ctx.translate(g.c*ts,g.r*ts); A.icon(ctx,'water',ts,ts,{}); ctx.restore();
+  }
+  ctx.setLineDash([]);
+}
+function drawExitKey(ix,iy){
+  const s=ts/U, Ex=world.exit, dx=Ex.c*ts+ts*.1, dw=ts*.8, dy=Ex.r*ts-ts*.85;
+  const hx=dx+dw/2, hy=dy+dw*.6;
+  const px=ix*s+ts*.5, py=iy*s-ts*1.1;
+  const f=ease(clamp01(exitT/EX.fly));
+  const x=px+(hx-px)*f, y=py+(hy-py)*f-Math.sin(f*Math.PI)*ts*.5;
+  const rot=clamp01((exitT-EX.fly)/(EX.turn-EX.fly))*Math.PI/2;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot);
+  ctx.strokeStyle=KEYC[0]; ctx.lineWidth=Math.max(2,ts*.1); ctx.lineCap='round';
+  ctx.beginPath(); ctx.arc(-ts*.3,0,ts*.14,0,7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-ts*.16,0); ctx.lineTo(ts*.1,0); ctx.moveTo(0,0); ctx.lineTo(0,ts*.12); ctx.stroke();
+  ctx.restore();
+}
+
+function start(data){
+  applyI18n();
+  langButton($('langBtn'),()=>{ if(mode==='menu'){ hideOverlay(); mode='play'; showMenu(); } else if(mode==='won'){ showWin(); }
+    if(def){ headerTexts(); updateTray(); updateKeys(); if(edit) validate(); } });
+  resize();
+  if(TEST){ $('menuBtn').dataset.i18n='toEditor'; $('menuBtn').textContent=T('toEditor'); }
+  loadLevel(TEST? 0 : Math.min(data && data.level!=null ? data.level : progress, NBUILT-1));
+  requestAnimationFrame(t=>{ last=t; loop(t); });
+}
+window.claude?.hot?.snapshot?.(()=>({level:li}));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+</body>
+</html>
