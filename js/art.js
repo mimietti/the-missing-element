@@ -22,21 +22,29 @@ const ART = (function(){
     const a=r%2?.3:.7, b=r%2?.7:.3;
     g.moveTo(x+s*a,y); g.lineTo(x+s*a,y+s*.5); g.moveTo(x+s*b,y+s*.5); g.lineTo(x+s*b,y+s); g.stroke();
   }
-  // maa: ohut laatta, tai täysi ruutu kun alla on kiinteää (pankki, kumpu)
-  // o.wet 0..1: kastuu veden alla; o.mud: vesi on imeytynyt läpi, pinnalla mutaa
+  // maa: täysi ruutu kun alla on kiinteää (pankki, kumpu), muuten paksu turvemätäs, jonka avoimet päät
+  // pyöristyvät ja alapinnasta roikkuu juuria (selvästi eri näköinen kuin ohut puulattia).
+  // o.l / o.r: vieressä on maata. o.wet 0..1: kastuu veden alla; o.mud: vesi on imeytynyt läpi, pinnalla mutaa
   function earth(g,x,y,s,o={}){
-    const h = o.full? s+.5 : s*.42;
+    const h = o.full? s+.5 : s*.62;
     let col = o.mine? mix(C.earth,'#FFFFFF',.25) : C.earth;
     if(o.mud) col=mix(col,C.wetEarth,.8); else if(o.wet) col=mix(col,C.wetEarth,Math.min(1,o.wet));
-    g.fillStyle = col; rr(g,x,y,s+(o.full?.5:0),h,o.full?0:s*.1); g.fill();
+    g.fillStyle = col;
+    if(o.full) g.fillRect(x,y,s+.5,h);
+    else { const rL=o.l? 0 : s*.3, rR=o.r? 0 : s*.3, w=s+(o.r?.5:0);
+      g.beginPath(); g.moveTo(x+rL,y); g.lineTo(x+w-rR,y); g.quadraticCurveTo(x+w,y,x+w,y+rR); g.lineTo(x+w,y+h-rR*.6);
+      g.quadraticCurveTo(x+w,y+h,x+w-rR,y+h); g.lineTo(x+rL,y+h); g.quadraticCurveTo(x,y+h,x,y+h-rL*.6); g.lineTo(x,y+rL);
+      g.quadraticCurveTo(x,y,x+rL,y); g.fill();
+      // juuret
+      const k=o.seed||.5; g.strokeStyle=C.earthDark; g.lineWidth=Math.max(1,s*.035); g.lineCap='round'; g.beginPath();
+      for(const [px,len] of [[.28+.2*k,.16],[.62+.15*k,.1]]){ g.moveTo(x+s*px,y+h-1); g.quadraticCurveTo(x+s*(px+.04),y+h+s*len*.6,x+s*(px-.02),y+h+s*len); }
+      g.stroke(); }
     if(o.mud){
       g.fillStyle=C.mud; rr(g,x,y,s+.5,s*.16,s*.05); g.fill();
       const k=o.seed||.5; g.fillStyle=C.mudHi; g.globalAlpha=.55;
       g.beginPath(); g.ellipse(x+s*(.2+.5*k),y+s*.07,s*.14,s*.035,0,0,7); g.fill(); g.globalAlpha=1;
-      if(!o.full){ g.fillStyle=C.earthDark; g.fillRect(x+s*.08,y+h-s*.08,s*.84,s*.08); }
-      return;
+        return;
     }
-    if(!o.full){ g.fillStyle=C.earthDark; g.fillRect(x+s*.08,y+h-s*.08,s*.84,s*.08); }
     // pieniä kiviä
     g.fillStyle='rgba(255,255,255,.18)'; const k=o.seed||0;
     g.beginPath(); g.arc(x+s*(.25+.5*k),y+h*.62,s*.05,0,7); g.fill();
@@ -96,12 +104,14 @@ const ART = (function(){
     }
   }
   // heinätupsu maan päällä; bend -1..1 (tuulen suunta ja voima)
-  function grass(g,x,y,s,seed,f,bend){
-    const sway=Math.sin(f/400+seed*6)*.08;
-    const b=bend + sway + (bend? Math.sin(f/120+seed*5)*.12*Math.abs(bend) : 0);
-    const n=3, x0=x+s*(.2+.5*seed);
+  // tall: harvinainen pitkä heinä, jota tuuli taivuttaa enemmän
+  function grass(g,x,y,s,seed,f,bend,tall){
+    const sway=Math.sin(f/400+seed*6)*(tall? .16 : .08);
+    let b=(tall? bend*1.6 : bend) + sway + (bend? Math.sin(f/(tall?90:120)+seed*5)*(tall?.22:.12)*Math.abs(bend) : 0);
+    b=Math.max(-1.25,Math.min(1.25,b));
+    const n=tall? 2 : 3, x0=x+s*(.2+.5*seed);
     for(let k=0;k<n;k++){
-      const bx=x0+(k-1)*s*.07, h=s*(.26+.08*((k+seed*3)%1.5));
+      const bx=x0+(k-1)*s*.07, h= tall? s*(.62+.22*((k+seed*3)%1)) : s*(.26+.08*((k+seed*3)%1.5));
       g.strokeStyle= k===1? C.grass : C.grassHi; g.lineWidth=Math.max(1.2,s*.045); g.lineCap='round';
       g.beginPath(); g.moveTo(bx,y); g.quadraticCurveTo(bx+b*h*.3,y-h*.6,bx+b*h*.9,y-h*(1-Math.abs(b)*.35)); g.stroke();
     }

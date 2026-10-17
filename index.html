@@ -364,7 +364,7 @@ function drawTiles(mine){
     if(edit && placed[edit.k] && placed[edit.k].el==='earth' && pieceCells(placed[edit.k]).some(([a,b])=>a===r&&b===c)) continue;
     const x=c*ts, y=r*ts;
     if(t===EARTH){ const below=gAt(r+1,c), above=gAt(r-1,c);
-      A.earth(ctx,x,y,ts,{full: below===EARTH||below===WALL, covered: above===EARTH||above===WALL, mine:mine.has(i), seed:A.hash(r,c),
+      A.earth(ctx,x,y,ts,{full: below===EARTH||below===WALL, covered: above===EARTH||above===WALL, mine:mine.has(i), seed:A.hash(r,c), l: gAt(r,c-1)===EARTH, r: gAt(r,c+1)===EARTH,
         mud: mudAt(world,st.t,i), wet: (waterAt(world,st.t)[i]&4) && i>=COLS && wetAt(world,st.t,i-COLS) ? .8 : 0}); }
     else if(t===WALL) A.stone(ctx,x,y,ts,r);
     else if(t===WOOD) A.wood(ctx,x,y,ts,{char:charOf(i)});
@@ -376,8 +376,8 @@ function drawTiles(mine){
 function drawGrass(){
   for(let r=1;r<ROWS;r++) for(let c=0;c<COLS;c++){
     if(world.g[r*COLS+c]!==EARTH || world.g[(r-1)*COLS+c]!==E || (waterAt(world,st.t)[r*COLS+c]&4)) continue;
-    const h=A.hash(r,c); if(h>.5) continue;
-    const v=world.wind[(r-1)*COLS+c]; A.grass(ctx,c*ts,r*ts,ts,h*2,frame, v? Math.sign(v)*(Math.abs(v)===2?1:.55) : 0);
+    const h=A.hash(r,c), tall=A.hash(c+31,r+7)<.16; if(h>.5 && !tall) continue;
+    const v=world.wind[(r-1)*COLS+c]; A.grass(ctx,c*ts,r*ts,ts,tall? A.hash(r+3,c) : h*2,frame, v? Math.sign(v)*(Math.abs(v)===2?1:.55) : 0, tall);
   }
 }
 function drawDoor(r,c){
