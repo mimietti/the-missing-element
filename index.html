@@ -125,7 +125,7 @@ button:disabled{opacity:.4}
 <script src="js/levels.js"></script>
 <script>
 (()=>{
-const {U,COLS,ROWS,MAXFALL,BURN,wetAt,mudAt,waterAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,ELEMENTS,
+const {U,COLS,ROWS,MAXFALL,BURN,wetAt,mudAt,waterAt,waterRawAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,ELEMENTS,
   makeWorld,newState,step,freeFor,guardPos,pieceCells,waterPreview,burnable}=PPEngine;
 const $=id=>document.getElementById(id);
 const board=$('board'), ctx=board.getContext('2d');
@@ -434,7 +434,7 @@ function drawPlayer(px,py){
 }
 // vesikerros: paikallaan oleva vesi ruuduittain, virtaava vesi nauhoina. Kaikki näkyy veden läpi.
 function drawWater(alpha){
-  const wa=waterAt(world,st.t);
+  const wa=waterRawAt(world,st.t);
   const wet=(r,c)=> r>=0&&r<ROWS&&c>=0&&c<COLS&&(wa[r*COLS+c]&1);
   const solidNow=(r,c)=>{ if(r<0||r>=ROWS||c<0||c>=COLS) return true; const i=r*COLS+c, t=world.g[i]; return (t===EARTH||t===WALL||t===WOOD||t===FENCE)&&!gone(i); };
   for(let i=0;i<wa.length;i++){ const v=wa[i]; if(!(v&10) || (v&1)) continue;

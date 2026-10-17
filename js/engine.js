@@ -211,10 +211,30 @@ function wsim(w){
   w.ws=S; return S;
 }
 const NOWATER=new Uint8Array(COLS*ROWS);
+function waterRawAt(w,t){ return w.hasWater? wsim(w).at(Math.max(0,t)) : NOWATER; }
+// Pelaajan kokema vesi. Vajaa pintarivi (piirretään tasaisena ohuena kerroksena koko altaan levyltä)
+// lasketaan täydeksi, jos sitä on vähintään puolet rivin leveydestä, muuten sitä ei ole lainkaan.
+// Näin uiminen ja kahlaaminen vastaavat sitä, mitä ruudulla näkyy.
 function waterAt(w,t){
   if(!w.hasWater) return NOWATER;
   const kk=Math.floor(Math.max(0,t)/WSTEP); if(w._wk===kk) return w._wa;
-  w._wk=kk; return (w._wa=wsim(w).at(kk*WSTEP));
+  const S=wsim(w), raw=S.at(kk*WSTEP), ki=Math.min(kk,S.snaps.length-1);
+  S.eff=S.eff||[]; if(S.eff[ki]){ w._wk=kk; return (w._wa=S.eff[ki]); }
+  const a=raw.slice(), tick=ki*WSTEP, g=w.g, ign=w.ign;
+  const solidAt=(r,c)=>{ if(r<0||r>=ROWS||c<0||c>=COLS) return true; const i=r*COLS+c; return solid(g[i]) && !(ign[i]>=0 && tick>=ign[i]+BURN); };
+  const wet=(r,c)=> r>=0&&r<ROWS&&c>=0&&c<COLS&&(raw[r*COLS+c]&1);
+  for(let r=0;r<ROWS;r++){ let c=0;
+    while(c<COLS){
+      if(solidAt(r,c)){ c++; continue; }
+      let c1=c; while(c1+1<COLS && !solidAt(r,c1+1)) c1++;
+      let n=0, held=true, top=true;
+      for(let x=c;x<=c1;x++){ if(wet(r,x)) n++; if(!(r+1>=ROWS||solidAt(r+1,x)||wet(r+1,x))) held=false; if(wet(r-1,x)) top=false; }
+      const W=c1-c+1;
+      if(n && n<W && held && top){ const full=2*n>=W; for(let x=c;x<=c1;x++){ const i=r*COLS+x; a[i]= full? (a[i]|1) : (a[i]&~1); } }
+      c=c1+1;
+    }
+  }
+  S.eff[ki]=a; w._wk=kk; return (w._wa=a);
 }
 // onko ruudussa vettä hetkellä t; muta = märkä maa, jonka päällä ei ole vettä
 function wetAt(w,t,i){ return (waterAt(w,t)[i]&1)===1; }
@@ -411,7 +431,7 @@ function waterPreview(def, piece, others){
   return out;
 }
 
-const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,DRAIN,WSTEP,wetAt,mudAt,waterAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
+const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,DRAIN,WSTEP,wetAt,mudAt,waterAt,waterRawAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
   parseLevel,makeWorld,newState,cloneS,step,freeFor,tileAt,burningAt,supportCols,guardPos,settled,pieceCells,waterPreview,floatY,burnable};
 if(typeof module!=='undefined') module.exports=API;
 if(typeof self!=='undefined') self.PPEngine=API;
