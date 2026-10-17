@@ -69,14 +69,17 @@ const ART = (function(){
   function water(g,x,y,s,o={}){
     const f=o.frame||0, a=o.alpha??.55;
     g.globalAlpha=a; g.fillStyle=C.water;
+    // o.w, o.h: leveämpi tai matalampi vesialue (oletus yksi ruutu)
+    const W=o.w||s, H=o.h||s, n=Math.max(8,Math.round(8*W/s)), top=Math.min(s*.18,H*.4);
     if(o.surface){
-      const amp=s*(o.wind? .09 : .04), sp=o.wind? .006*Math.sign(o.wind) : .002, ph=f*sp;
-      g.beginPath(); g.moveTo(x,y+s);
-      for(let k=0;k<=8;k++){ const xx=x+s*k/8; g.lineTo(xx, y+s*.18+Math.sin((xx/s)*Math.PI*2+ph*6)*amp); }
-      g.lineTo(x+s,y+s); g.closePath(); g.fill();
+      const amp=Math.min(s*(o.wind? .09 : .04),H*.3), sp=o.wind? .006*Math.sign(o.wind) : .002, ph=f*sp;
+      const yAt=xx=> y+top+Math.sin((xx/s)*Math.PI*2+ph*6)*amp;
+      g.beginPath(); g.moveTo(x,y+H);
+      for(let k=0;k<=n;k++){ const xx=x+W*k/n; g.lineTo(xx, yAt(xx)); }
+      g.lineTo(x+W,y+H); g.closePath(); g.fill();
       g.globalAlpha=Math.min(1,a+.3); g.strokeStyle=C.waterHi; g.lineWidth=Math.max(1.5,s*.06);
-      g.beginPath(); for(let k=0;k<=8;k++){ const xx=x+s*k/8, yy=y+s*.18+Math.sin((xx/s)*Math.PI*2+ph*6)*amp; k? g.lineTo(xx,yy) : g.moveTo(xx,yy); } g.stroke();
-    } else g.fillRect(x,y,s,s);
+      g.beginPath(); for(let k=0;k<=n;k++){ const xx=x+W*k/n; k? g.lineTo(xx,yAt(xx)) : g.moveTo(xx,yAt(xx)); } g.stroke();
+    } else g.fillRect(x,y,W,H);
     g.globalAlpha=1;
   }
   // liekki: kolme kieltä, välkkyy; k = voimakkuus 0..1
@@ -121,6 +124,28 @@ const ART = (function(){
     }
     g.globalAlpha=1;
   }
+  // virtaava vesi: pystysuora nauha tai ohut kerros pinnalla, liikkuvat valojuovat
+  function stream(g,x,y,s,o={}){
+    const f=o.frame||0, a=o.alpha??.55;
+    g.globalAlpha=a; g.fillStyle=C.water;
+    if(o.v){ const w=s*.36, x0=x+(s-w)/2; g.fillRect(x0,y,w,s+.5);
+      g.globalAlpha=Math.min(1,a+.25); g.strokeStyle=C.waterHi; g.lineWidth=Math.max(1,s*.05);
+      const ph=(f*.004)%1; g.beginPath();
+      for(let k=-1;k<2;k++){ const yy=y+((k+ph)*s*.6+s*.2); if(yy<y||yy+s*.18>y+s) continue; g.moveTo(x0+w*.35,yy); g.lineTo(x0+w*.35,yy+s*.18); }
+      g.stroke(); }
+    else { const h=s*.26, y0=y+s-h, d=o.dir||1, ph=f*.006*d;
+      g.beginPath(); g.moveTo(x,y+s);
+      for(let k=0;k<=6;k++){ const xx=x+s*k/6; g.lineTo(xx,y0+Math.sin((xx/s)*Math.PI*2-ph*3)*s*.04); }
+      g.lineTo(x+s,y+s); g.closePath(); g.fill(); }
+    g.globalAlpha=1;
+  }
+  // lähde: kivinen suu, josta vesi tulee
+  function source(g,x,y,s,f=0){
+    g.fillStyle=C.stoneDark; rr(g,x+s*.18,y+s*.06,s*.64,s*.34,s*.1); g.fill();
+    g.fillStyle=C.ink; rr(g,x+s*.34,y+s*.26,s*.32,s*.14,s*.05); g.fill();
+    g.fillStyle=C.water; const ph=((f*.002)%1+1)%1;
+    g.beginPath(); g.ellipse(x+s*.5,y+s*(.5+ph*.4),s*.07,s*.1,0,0,7); g.fill();
+  }
   function key(g,cx,cy,s,col){
     g.strokeStyle=col||C.key; g.lineWidth=Math.max(2,s*.1); g.lineCap='round';
     g.beginPath(); g.arc(cx-s*.12,cy,s*.14,0,7); g.stroke();
@@ -142,6 +167,6 @@ const ART = (function(){
       g.strokeStyle=C.waterHi; g.lineWidth=Math.max(1.5,s*.05); g.beginPath(); g.arc(cx,y+s*.66,s*.2,Math.PI*.95,Math.PI*1.35); g.stroke(); }
     g.globalAlpha=1;
   }
-  return {C,rr,hash,mix,stone,earth,wood,fence,spike,water,flame,grass,wind,key,icon};
+  return {C,rr,hash,mix,stone,earth,wood,fence,spike,water,stream,source,flame,grass,wind,key,icon};
 })();
 if(typeof module!=='undefined') module.exports=ART;

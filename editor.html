@@ -139,10 +139,10 @@ const $=id=>document.getElementById(id);
 const A=ART, C=ART.C;
 const PCOL={earth:'#D8A73A',fire:'#BE4A3F',wind:'#3D6F79',water:'#2F5FA8'};
 const elName=el=>T('el.'+el);
-const DEFAULTS={earth:{el:'earth',len:2},fire:{el:'fire'},wind:{el:'wind',len:4,dir:1,strong:false},water:{el:'water',h:2}};
-const WATER_HEIGHTS=[1,2,3,4,5,6,7,8,99];
+const DEFAULTS={earth:{el:'earth',len:2},fire:{el:'fire'},wind:{el:'wind',len:4,dir:1,strong:false},water:{el:'water'}};
+const WATER_AMOUNTS=[0,4,6,8,10,12,16,20,24,30];   // 0 = virtaa koko ajan
 
-const TOOLS=[{id:'.'},{id:'='},{id:'#'},{id:'-'},{id:'H'},{id:'f'},{id:'F'},{id:'w'},{id:'^'},{sep:true},{id:'<'},{id:'>'},{id:'['},{id:']'},{sep:true},{id:'k'},{id:'P'},{id:'E'},{id:'G'}];
+const TOOLS=[{id:'.'},{id:'='},{id:'#'},{id:'-'},{id:'H'},{id:'f'},{id:'F'},{id:'w'},{id:'S'},{id:'^'},{sep:true},{id:'<'},{id:'>'},{id:'['},{id:']'},{sep:true},{id:'k'},{id:'P'},{id:'E'},{id:'G'}];
 
 // ---------- tila ----------
 let L, tool='=', solK=-1, dirty=false;
@@ -157,7 +157,7 @@ function cleanPiece(p){
   if(p.el==='earth') return {el:'earth',len:p.len||2};
   if(p.el==='fire') return {el:'fire'};
   if(p.el==='wind'){ const o={el:'wind',len:p.len||4,dir:p.dir<0?-1:1}; if(p.strong) o.strong=true; return o; }
-  if(p.el==='water') return p.h? {el:'water',h:p.h} : (p.len? {el:'water',len:p.len} : {el:'water',h:2});
+  if(p.el==='water') return p.len? {el:'water',len:p.len} : {el:'water'};
   return null;
 }
 function normalize(o){
@@ -223,6 +223,7 @@ function drawCell(g,ch,x,y,s,o={}){
   else if(ch==='f'){ A.wood(g,x,y+oy,s); A.flame(g,x,y+oy-s*.7,s,0,.4,.8); }
   else if(ch==='F'){ A.fence(g,x,y,s,{top:o.icon||o.top}); A.flame(g,x,y,s,0,.6,.8); }
   else if(ch==='w') A.water(g,x,y,s,{surface:o.icon||o.surface,alpha:.6});
+  else if(ch==='S'){ if(o.icon){ g.fillStyle=C.bg; g.fillRect(x,y,s,s); } A.source(g,x,y,s,0); A.stream(g,x+s*.275,y+s*.55,s*.45,{v:true,alpha:.6}); }
   else if(WINDV[ch]){ A.wind(g,x,y,s,WINDV[ch],0,o.seed||.5); windArrow(g,x,y,s,WINDV[ch]); }
   else if(ch==='^') A.spike(g,x,y,s);
   else if(ch==='k') A.key(g,x+s/2,y+s/2,s);
@@ -273,8 +274,8 @@ function draw(){
     if(p.el==='earth') for(const [r,c] of pieceCells(sp)) A.earth(g,c*ts,r*ts,ts,{mine:true,seed:.3});
     else if(p.el==='fire') A.flame(g,sp.c*ts,sp.r*ts,ts,0,.4,.9);
     else if(p.el==='wind') for(const [r,c] of pieceCells(sp)) A.wind(g,c*ts,r*ts,ts,p.dir*(p.strong?2:1),0,A.hash(r,c));
-    else if(p.el==='water'){ const cells=waterPreview(lv,sp,otherSols(k)); const set=new Set(cells);
-      for(const i of cells){ const r=(i/COLS)|0, c=i%COLS; A.water(g,c*ts,r*ts,ts,{surface:!set.has(i-COLS),alpha:.45}); } }
+    else if(p.el==='water'){ const cells=waterPreview(lv,sp,otherSols(k));
+      for(const i of cells){ const r=(i/COLS)|0, c=i%COLS; A.stream(g,c*ts,r*ts,ts,{v:true,alpha:.5}); } }
     g.globalAlpha=1;
     g.strokeStyle=col; g.lineWidth=2.5; g.setLineDash([5,3]);
     if(p.el==='earth') A.rr(g,sp.c*ts+1,sp.r*ts+1,p.len*ts-2,ts-2,5);
@@ -348,7 +349,7 @@ function renderPieces(){
     if(p && p.el==='wind') opts=`<label>${T('ed.size')} <select data-f="len">${[2,3,4,5,6,7,8].map(n=>`<option ${p.len===n?'selected':''}>${n}</option>`).join('')}</select></label>
       <label>${T('ed.dir')} <select data-f="dir"><option value="1" ${p.dir>0?'selected':''}>→</option><option value="-1" ${p.dir<0?'selected':''}>←</option></select></label>
       <label><input type="checkbox" data-f="strong" ${p.strong?'checked':''}> ${T('ed.strong')}</label>`;
-    if(p && p.el==='water') opts=`<label>${T('ed.height')} <select data-f="h">${(p.h?[]:[0]).concat(WATER_HEIGHTS).map(n=>`<option value="${n}" ${(p.h||0)===n?'selected':''}>${n===99?T('ed.full'):n===0?T('ed.amount')+' '+p.len:n}</option>`).join('')}</select></label>`;
+    if(p && p.el==='water') opts=`<label>${T('ed.amount')} <select data-f="len">${WATER_AMOUNTS.map(n=>`<option value="${n}" ${(p.len||0)===n?'selected':''}>${n||T('ed.unlimited')}</option>`).join('')}</select></label>`;
     d.innerHTML=`<div class="top"><canvas width="60" height="40"></canvas><label><input type="checkbox" data-f="on" ${p?'checked':''}> ${elName(name)}</label>
       ${p? `<button class="${solK===k?'on':''}" title="${T('ed.solTitle')}">${L.sol[k]?T('ed.solMove'):T('ed.solBtn')}</button>` : ''}</div>
       ${opts? `<div class="opts">${opts}</div>` : ''}`;
@@ -357,7 +358,7 @@ function renderPieces(){
       if(e.target.checked){ L.pieces.push({...DEFAULTS[name]}); L.sol.push(null); Object.assign(L,normalize(L)); }
       else { L.pieces.splice(k,1); L.sol.splice(k,1); }
       solK=-1; renderPieces(); changed(); };
-    d.querySelectorAll('select[data-f]').forEach(s=>s.onchange=()=>{ const f=s.dataset.f; p[f]=+s.value; if(f==='h' && p.h) delete p.len;
+    d.querySelectorAll('select[data-f]').forEach(s=>s.onchange=()=>{ const f=s.dataset.f; p[f]=+s.value; if(p.el==='water' && !p.len) delete p.len; delete p.h;
       if(L.sol[k] && (p.el==='earth'||p.el==='wind') && L.sol[k].c+p.len>COLS) L.sol[k]=null; renderPieces(); changed(); });
     const sc=d.querySelector('input[data-f=strong]'); if(sc) sc.onchange=()=>{ p.strong=sc.checked; renderPieces(); changed(); };
     const b=d.querySelector('.top button'); if(b) b.onclick=()=>{ solK = solK===k? -1 : k; updateTools(); renderPieces(); if(solK>=0) toast(T('ed.tapSpot',{n:elName(name)})); };

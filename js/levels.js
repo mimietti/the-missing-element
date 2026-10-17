@@ -1,6 +1,6 @@
 // The Missing Element: kentät.
 // Merkit: # kivi  = maa  - puulattia  H puuaita  f palava puulattia  F palava puuaita  w vesi  < > tuuli  [ ] kova tuuli  ^ piikki  k avain  E ovi  P aloitus
-// pieces: tarjolla olevat elementit {el:'earth'|'fire'|'wind'|'water', len, dir, strong, h (veden korkeus riveinä, 99 = täysi allas)}, sol: tarkistettu ratkaisu
+// pieces: tarjolla olevat elementit {el:'earth'|'fire'|'wind'|'water', len, dir, strong, len (vesi: lähteen määrä ruutuina, puuttuu = virtaa koko ajan)}, sol: tarkistettu ratkaisu
 // guards: r = rivi jolla vartija kävelee, c0..c1 reitti, dir 1 = aloittaa vasemmalta
 const LEVELS = [
 {
@@ -82,7 +82,7 @@ const LEVELS = [
   "name": "Vesi",
   "hint": "Pudotus on liian korkea. Veteen on turvallista hypätä.",
   "en": {"name": "Water", "hint": "The drop is too high. Water makes for a safe landing."},
-  "pieces": [{"el": "water", "h": 2}],
+  "pieces": [{"el": "water", "len": 12}],
   "sol": [{"r": 6, "c": 11}],
   "map": [
     "############################",

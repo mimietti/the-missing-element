@@ -125,7 +125,7 @@ button:disabled{opacity:.4}
 <script src="js/levels.js"></script>
 <script>
 (()=>{
-const {U,COLS,ROWS,MAXFALL,BURN,wetAt,mudAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,ELEMENTS,
+const {U,COLS,ROWS,MAXFALL,BURN,wetAt,mudAt,waterAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,ELEMENTS,
   makeWorld,newState,step,freeFor,guardPos,pieceCells,waterPreview,burnable}=PPEngine;
 const $=id=>document.getElementById(id);
 const board=$('board'), ctx=board.getContext('2d');
@@ -365,7 +365,7 @@ function drawTiles(mine){
     const x=c*ts, y=r*ts;
     if(t===EARTH){ const below=gAt(r+1,c), above=gAt(r-1,c);
       A.earth(ctx,x,y,ts,{full: below===EARTH||below===WALL, covered: above===EARTH||above===WALL, mine:mine.has(i), seed:A.hash(r,c),
-        mud: mudAt(world,st.t,i), wet: world.mudT[i]>=0? wetness(i) : 0}); }
+        mud: mudAt(world,st.t,i), wet: (waterAt(world,st.t)[i]&4) && i>=COLS && wetAt(world,st.t,i-COLS) ? .8 : 0}); }
     else if(t===WALL) A.stone(ctx,x,y,ts,r);
     else if(t===WOOD) A.wood(ctx,x,y,ts,{char:charOf(i)});
     else if(t===FENCE) A.fence(ctx,x,y,ts,{char:charOf(i), top: gAt(r-1,c)!==FENCE || gone(i-COLS)});
@@ -373,12 +373,9 @@ function drawTiles(mine){
     else if(t===EXIT) drawDoor(r,c);
   }
 }
-// imeytyvän altaan pohja tummuu vähitellen ennen kuin siitä tulee mutaa
-function wetness(i){ let j=i-COLS; while(j>=0 && world.g[j]!==WATER) j-=COLS; if(j<0 || world.drainA[j]<0) return 0;
-  const a=world.drainA[j], b=world.drainT[j]; return st.t<=a? .3 : Math.min(1,.3+.7*(st.t-a)/Math.max(1,b-a)); }
 function drawGrass(){
   for(let r=1;r<ROWS;r++) for(let c=0;c<COLS;c++){
-    if(world.g[r*COLS+c]!==EARTH || world.g[(r-1)*COLS+c]!==E || world.mudT[r*COLS+c]>=0) continue;
+    if(world.g[r*COLS+c]!==EARTH || world.g[(r-1)*COLS+c]!==E || (waterAt(world,st.t)[r*COLS+c]&4)) continue;
     const h=A.hash(r,c); if(h>.5) continue;
     const v=world.wind[(r-1)*COLS+c]; A.grass(ctx,c*ts,r*ts,ts,h*2,frame, v? Math.sign(v)*(Math.abs(v)===2?1:.55) : 0);
   }
@@ -435,17 +432,34 @@ function drawPlayer(px,py){
   ctx.fillStyle=C.ink; ctx.beginPath(); ctx.arc(x+w*.5+face*w*.11,y-h*.73,w*.045,0,7); ctx.fill();
   ctx.restore();
 }
-// imeytyvä pintarivi laskee tasaisesti: piirretään vain jäljellä oleva osa ruudusta
-function drawWater(cells,alpha){
-  const set=new Set(cells), t=st.t+(typeof lastAlpha==='number'? lastAlpha : 0);
-  for(const i of cells){ const r=(i/COLS)|0, c=i%COLS, x=c*ts, y=r*ts;
-    const wv=world.wind[i]||(r>0?world.wind[i-COLS]:0), surf=!set.has(i-COLS);
-    const a=world.drainA[i], b=world.drainT[i];
-    const f = (surf && a>=0 && t>a)? Math.min(1,(t-a)/Math.max(1,b-a)) : 0;
-    if(f>0){ ctx.save(); ctx.beginPath(); ctx.rect(x,y,ts,ts); ctx.clip();
-      A.water(ctx,x,y+f*ts*.85,ts,{surface:true, frame, wind:wv, alpha}); ctx.restore(); }
-    else A.water(ctx,x,y,ts,{surface:surf, frame, wind:wv, alpha}); }
+// vesikerros: paikallaan oleva vesi ruuduittain, virtaava vesi nauhoina. Kaikki näkyy veden läpi.
+function drawWater(alpha){
+  const wa=waterAt(world,st.t);
+  const wet=(r,c)=> r>=0&&r<ROWS&&c>=0&&c<COLS&&(wa[r*COLS+c]&1);
+  const solidNow=(r,c)=>{ if(r<0||r>=ROWS||c<0||c>=COLS) return true; const i=r*COLS+c, t=world.g[i]; return (t===EARTH||t===WALL||t===WOOD||t===FENCE)&&!gone(i); };
+  for(let i=0;i<wa.length;i++){ const v=wa[i]; if(!(v&10) || (v&1)) continue;
+    const x=(i%COLS)*ts, y=((i/COLS)|0)*ts;
+    if(v&2) A.stream(ctx,x,y,ts,{v:true,frame,alpha});
+    if(v&8) A.stream(ctx,x,y,ts,{v:false,frame,alpha});
+  }
+  // vajaa pintarivi piirretään tasaisena kerroksena koko altaan levyltä, muuten ruuduittain
+  const film=new Uint8Array(COLS*ROWS);
+  for(let r=0;r<ROWS;r++){ let c=0;
+    while(c<COLS){
+      if(solidNow(r,c)){ c++; continue; }
+      let c1=c; while(c1+1<COLS && !solidNow(r,c1+1)) c1++;
+      let n=0, held=true, top=true;
+      for(let x=c;x<=c1;x++){ if(wet(r,x)) n++; if(!(r+1>=ROWS||solidNow(r+1,x)||wet(r+1,x))) held=false; if(wet(r-1,x)) top=false; }
+      const W=c1-c+1;
+      if(n && n<W && held && top){ const h=ts*n/W; A.water(ctx,c*ts,(r+1)*ts-h,ts,{w:W*ts,h,surface:true,frame,alpha}); for(let x=c;x<=c1;x++) film[r*COLS+x]=1; }
+      else for(let x=c;x<=c1;x++) if(wet(r,x)){ const i=r*COLS+x, wv=world.wind[i]||(r>0?world.wind[i-COLS]:0);
+        A.water(ctx,x*ts,r*ts,ts,{surface:!wet(r-1,x) && !(r>0 && film[i-COLS]), frame, wind:wv, alpha}); }
+      c=c1+1;
+    }
+  }
 }
+function drawSources(){ for(const q of world.sources) A.source(ctx,q.c*ts,q.r*ts,ts,frame); }
+function drawStreamPreview(cells,alpha){ for(const i of cells) A.stream(ctx,(i%COLS)*ts,((i/COLS)|0)*ts,ts,{v:true,frame,alpha}); }
 function drawFire(){
   for(let i=0;i<world.ign.length;i++){
     const g0=world.ign[i]; if(g0<0 || st.t<g0 || st.t>=g0+BURN) continue;
@@ -479,7 +493,7 @@ function draw(alpha){
   ctx.globalAlpha=1;
   const hideWater = edit && placed[edit.k] && placed[edit.k].el==='water';
   lastAlpha=alpha;
-  if(!hideWater){ const wc=[]; for(let i=0;i<world.g.length;i++) if(wetAt(world,st.t,i) || (world.g[i]===SPIKE && i>=COLS && wetAt(world,st.t,i-COLS))) wc.push(i); drawWater(wc,.45); }
+  if(!hideWater){ drawSources(); drawWater(.45); }
   drawSplash();
   drawFire();
   if(exitT>=0 && exitT<EX.turn+80 && world.exit) drawExitKey(ix,iy);
@@ -510,7 +524,7 @@ function drawGhost(){
     ctx.strokeStyle=ok? C.fjord : C.lingon; ctx.fillStyle=ctx.strokeStyle; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x0,cy); ctx.lineTo(x1-g.dir*ts*.2,cy); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x1,cy); ctx.lineTo(x1-g.dir*ts*.35,cy-ts*.22); ctx.lineTo(x1-g.dir*ts*.35,cy+ts*.22); ctx.fill();
   } else if(g.el==='water'){
-    drawWater(edit.preview,.45);
+    drawStreamPreview(edit.preview,.5);
     ctx.strokeStyle= ok? C.fjord : C.lingon; ctx.setLineDash([5,4]); rr(g.c*ts+1,g.r*ts+1,ts-2,ts-2,6); ctx.stroke(); ctx.setLineDash([]);
     ctx.save(); ctx.translate(g.c*ts,g.r*ts); A.icon(ctx,'water',ts,ts,{}); ctx.restore();
   }

@@ -15,14 +15,18 @@ const BURN = 50;             // kauanko ruutu palaa
 const SPREAD_UP = 20;        // ylös: naapuri syttyy 1 s kuluttua
 const SPREAD_SIDE = 40;      // sivulle tyynellä
 const SPREAD_WIND = [40,16,8];// sivulle myötätuuleen: tyyni / heikko / kova
-// imeytyminen: maapohja imee vettä, kivi ei. Yhden ruudun paksuinen maapohja laskee
-// koko altaan pintaa rivin DRAIN tickissä; paksumpi maa hitaammin, kivikohdat eivät ime lainkaan.
-const DRAIN = 300;           // 15 s per rivi yhden ruudun maakerroksen läpi
+// vesi: kevyt ruutusimulaatio, askel WSTEP tickin välein (10 askelta/s)
+const WSTEP = 2;
+const EMIT = 4;              // lähde tuottaa yhden vesiruudun 4 askeleen välein (2,5 ruutua/s)
+const DRAIN = 300;           // maa imee yhden vesiruudun 15 s:ssa per maakerroksen paksuusruutu
+const W_STEADY = 60;         // näin monta muuttumatonta askelta = vesi on asettunut
+const W_HORIZON = 3000;      // simulaation yläraja (5 min), sen jälkeen tilanne jäädytetään
 const halfSteps=(sp,t)=>Math.floor(t*sp/2)-Math.floor((t-1)*sp/2);
 
 // ruutukoodit
 const E=0, EARTH=1, WALL=2, WOOD=3, FENCE=4, SPIKE=6, EXIT=7, WATER=8;
-const CH = {'=':EARTH,'#':WALL,'-':WOOD,'H':FENCE,'^':SPIKE,'E':EXIT,'w':WATER,'f':WOOD,'F':FENCE};
+const CH = {'=':EARTH,'#':WALL,'-':WOOD,'H':FENCE,'^':SPIKE,'E':EXIT,'f':WOOD,'F':FENCE};
+// w = paikallaan oleva vesi alussa, S = lähde (virtaa koko ajan). Vesi on omassa kerroksessaan, ei ruudukossa.
 const FIRECH = {'f':1,'F':1};   // valmiiksi palava puulattia / puuaita
 const WINDCH = {'<':-1,'>':1,'[':-2,']':2};
 const ELEMENTS = ['earth','fire','wind','water'];
@@ -33,7 +37,7 @@ const burnable = t => t===WOOD||t===FENCE;
 
 function parseLevel(def){
   const g = new Uint8Array(COLS*ROWS), wind = new Int8Array(COLS*ROWS);
-  let start=null; const keys=[]; let exit=null; const fires=[];
+  let start=null; const keys=[]; let exit=null; const fires=[], initWet=[], sources=[];
   def.map.forEach((row,r)=>{
     for(let c=0;c<COLS;c++){
       const ch=row[c]||'.';
@@ -42,13 +46,15 @@ function parseLevel(def){
       if(ch==='E') exit={r,c};
       if(ch==='k') keys.push({r,c});
       if(FIRECH[ch]) fires.push({el:'fire',r,c,t0:0});
+      if(ch==='w') initWet.push(r*COLS+c);
+      if(ch==='S') sources.push({r,c,t0:0,len:0});
       if(ch==='P') start={x:c*U, y:(r+1)*U};
     }
   });
   // veden keskellä oleva avain on vedessä (kartassa ruutuun mahtuu vain yksi merkki)
   const chAt=(r,c)=> (def.map[r]||'')[c];
-  for(const K of keys) if(chAt(K.r,K.c-1)==='w'||chAt(K.r,K.c+1)==='w'||chAt(K.r-1,K.c)==='w') g[K.r*COLS+K.c]=WATER;
-  return {g, wind, start, keys, exit, fires};
+  for(const K of keys) if(chAt(K.r,K.c-1)==='w'||chAt(K.r,K.c+1)==='w'||chAt(K.r-1,K.c)==='w') initWet.push(K.r*COLS+K.c);
+  return {g, wind, start, keys, exit, fires, initWet, sources};
 }
 
 // palan ruudut (tuli: yksi ruutu, vesi: kaatokohta)
@@ -60,52 +66,17 @@ function pieceCells(p){
   return out;
 }
 
-// Vesi valuu alimpaan kohtaan ja täyttää yhden altaan rivi kerrallaan, kunnes määrä loppuu
-// tai allas on täynnä. Ennen täyttöä vesi valuu reunojen yli altaaseen; täyttynyt allas ei tulvi.
-// h = veden korkeus riveinä (99 = täysi allas). Vanhoissa kentissä ilman h:ta vol on ruutujen määrä.
-// Piikit jäävät veden alle: vesi asettuu niiden päälle.
-function pour(g, r, c, vol, h){
-  const cells=[]; let rows=0;
-  if(h) vol=1e9;
-  const open=(rr,cc)=> rr>=0&&rr<ROWS&&cc>=0&&cc<COLS && !solid(g[rr*COLS+cc]) && g[rr*COLS+cc]!==WATER && g[rr*COLS+cc]!==SPIKE;
-  const held=(rr,cc)=> rr+1<ROWS && (solid(g[(rr+1)*COLS+cc]) || g[(rr+1)*COLS+cc]===WATER || g[(rr+1)*COLS+cc]===SPIKE);
-  if(!open(r,c)) return cells;
-  for(let guard=0; guard<200 && vol>0; guard++){
-    while(r+1<ROWS && open(r+1,c)) r++;
-    if(r+1>=ROWS) break;                               // valui ulos kentästä
-    let a=c, b=c;
-    while(open(r,a-1) && held(r,a-1)) a--;
-    while(open(r,b+1) && held(r,b+1)) b++;
-    const lDrop=open(r,a-1), rDrop=open(r,b+1);        // avoin mutta ei kannateltu = reuna
-    if(lDrop||rDrop){                                  // vesi valuu reunan yli
-      if(cells.length) break;                          // allas on täynnä: ylimäärä ei tulvi
-      c = (lDrop && rDrop)? ((c-a <= b-c)? a-1 : b+1) : (lDrop? a-1 : b+1);
-      continue;
-    }
-    const w=b-a+1;
-    if(w>vol) break;                                   // määrä ei riitä koko riville
-    for(let x=a;x<=b;x++){ g[r*COLS+x]=WATER; cells.push(r*COLS+x); }
-    vol-=w; rows++;
-    if(h && rows>=h) break;
-    let nc=-1; for(let x=a;x<=b;x++) if(open(r-1,x)){ nc=x; break; }
-    if(nc<0 || r-1<1) break;
-    r=r-1; c=nc;
-  }
-  return cells;
-}
-
 // Rakentaa maailman: perus + maa- ja tuulipalat, sitten vesi, sitten tulen aikataulu.
 // piece: {el, len, dir, strong, r, c, t0?}
 function makeWorld(def, pieces){
-  const {g,wind,start,keys,exit,fires:lvFires}=parseLevel(def);
+  const {g,wind,start,keys,exit,fires:lvFires,initWet,sources}=parseLevel(def);
   const ps=(pieces||[]).filter(Boolean).concat(lvFires);
   for(const p of ps){
     if(p.el==='earth') for(const [r,c] of pieceCells(p)) g[r*COLS+c]=EARTH;
     if(p.el==='wind') for(const [r,c] of pieceCells(p)) wind[r*COLS+c]=p.dir*(p.strong?2:1);
   }
-  const water=[], wT0=new Int32Array(COLS*ROWS);
-  for(const p of ps) if(p.el==='water') for(const i of pour(g,p.r,p.c,p.len,p.h)){ water.push(i); wT0[i]=p.t0||0; }
-  const {drainA,drainT,mudT,drainEnd}=drainSchedule(g,wT0);
+  // pelaajan vesi on lähde; len = rajallinen määrä ruutuja, muuten virtaa koko ajan
+  for(const p of ps) if(p.el==='water') sources.push({r:p.r,c:p.c,t0:p.t0||0,len:p.len||0});
   // tuli: syttymisajat lyhimpinä polkuina puuta pitkin
   const ign=new Int32Array(COLS*ROWS).fill(-1);
   let fireEnd=0;
@@ -138,48 +109,116 @@ function makeWorld(def, pieces){
   }
   const guards=(def.guards||[]).map(G=>{ const R=(G.c1-G.c0)*U; return {...G, R, P:2*R}; });
   let hasWind=false; for(let i=0;i<wind.length;i++) if(wind[i]){ hasWind=true; break; }
-  return {g, wind, ign, fireEnd, water, drainA, drainT, mudT, tEnd:Math.max(fireEnd,drainEnd),
-    start, keys, exit, guards, hasWind, allKeys:(1<<keys.length)-1};
+  const w={g, wind, ign, fireEnd, start, keys, exit, guards, hasWind, allKeys:(1<<keys.length)-1,
+    initWet, sources, hasWater: initWet.length>0 || sources.length>0, ws:null};
+  // aika, jonka jälkeen mikään ei enää muutu (ratkaisija käyttää). Laskee veden loppuun asti vasta kysyttäessä.
+  Object.defineProperty(w,'tEnd',{get(){ if(!w.hasWater) return fireEnd; const S=wsim(w); S.advance(1e9); return Math.max(fireEnd,S.frozenAt*WSTEP); }});
+  return w;
 }
 
-// Imeytymisen aikataulu. Jokainen allas (yhtenäinen vesialue) laskee rivi kerrallaan ylhäältä.
-// Kunkin sarakkeen pohja on ruutu alimman vesiruudun alla (piikkien alla niiden alusta).
-// Maapohja imee nopeudella 1/paksuus, kivi ei lainkaan. Kun sarakkeen vesi on imeytynyt, maapohjasta tulee mutaa.
-function drainSchedule(g,wT0){
-  const N=COLS*ROWS, drainA=new Int32Array(N).fill(-1), drainT=new Int32Array(N).fill(-1), mudT=new Int32Array(N).fill(-1);
-  const seen=new Uint8Array(N); let drainEnd=0;
-  for(let i0=0;i0<N;i0++){
-    if(g[i0]!==WATER || seen[i0]) continue;
-    const comp=[i0]; seen[i0]=1;
-    for(let k=0;k<comp.length;k++){ const i=comp[k], r=(i/COLS)|0, c=i%COLS;
-      for(const [rr,cc] of [[r-1,c],[r+1,c],[r,c-1],[r,c+1]]){
-        if(rr<0||rr>=ROWS||cc<0||cc>=COLS) continue; const j=rr*COLS+cc;
-        if(g[j]===WATER && !seen[j]){ seen[j]=1; comp.push(j); } } }
-    let t0=0; const low={};                            // sarake -> alin vesirivi
-    for(const i of comp){ const r=(i/COLS)|0, c=i%COLS; t0=Math.max(t0,wT0[i]); if(low[c]===undefined||r>low[c]) low[c]=r; }
-    const absorb={}, bottom={};
-    for(const c in low){
-      let r=low[c]+1; if(r<ROWS && g[r*COLS+ +c]===SPIKE) r++;
-      let d=0; while(r+d<ROWS && g[(r+d)*COLS+ +c]===EARTH) d++;
-      absorb[c]= d? 1/d : 0; bottom[c]= d? r*COLS+ +c : -1;
+// ---------- vesi ----------
+// Vesi liikkuu ruutu kerrallaan. Säännöt:
+//  1. Paikallaan oleva vesi putoaa, jos alla on tyhjää.
+//  2. Vesiruutu, jonka vierestä samalta riviltä pääsee reunalle (kohtaan jonka alla on tyhjää), lähtee valumaan.
+//  3. Lähde tuottaa vesiruudun EMIT askeleen välein. Liikkuva vesiruutu putoaa, tai pinnalla
+//     liukuu kohti lähintä reunaa, tai jos reunaa ei ole, asettuu paikalleen. Täysi allas valuu siis
+//     matalamman reunansa yli.
+//  4. Maa imee päällään olevaa vettä (hitaammin paksumpi maa). Imeytynyt vesi tippuu maakerroksen
+//     alta, jos siellä on tyhjää; muuten se jää maahan. Märästä maasta tulee mutaa, kun vesi on poissa.
+// Tila tallennetaan askelittain: bitti 1 = vettä, 2 = pystysuora virta, 8 = vaakasuora virta, 4 = märkä maa.
+function wsim(w){
+  if(w.ws) return w.ws;
+  const N=COLS*ROWS, g=w.g, ign=w.ign;
+  const wet=new Uint8Array(N), mud=new Uint8Array(N), cnt=new Uint16Array(N);
+  const lastV=new Int32Array(N).fill(-99), lastH=new Int32Array(N).fill(-99);
+  for(const i of w.initWet) if(!solid(g[i])) wet[i]=1;
+  const srcs=w.sources.map(s=>({r:s.r,c:s.c,next:Math.max(1,Math.ceil((s.t0||0)/WSTEP)),left:s.len>0?s.len:Infinity}));
+  let parcels=[], k=0, tick=0, stable=0;
+  const DS=Math.round(DRAIN/WSTEP);
+  const solidAt=i=> solid(g[i]) && !(ign[i]>=0 && tick>=ign[i]+BURN);
+  const openAt=(r,c)=> r>=0&&r<ROWS&&c>=0&&c<COLS && !solidAt(r*COLS+c) && !wet[r*COLS+c];
+  const belowOpen=(r,c)=> r+1>=ROWS || openAt(r+1,c);
+  // lähin reuna samalla rivillä: suunta -1/1 tai 0
+  function findDrop(r,c,pref){
+    let best=0, bd=1e9;
+    for(const d of (pref<0?[-1,1]:[1,-1])) for(let n=1;n<COLS;n++){
+      const cc=c+d*n; if(!openAt(r,cc)) break;
+      if(belowOpen(r,cc)){ if(n<bd){ bd=n; best=d; } break; }
     }
-    const rows=[...new Set(comp.map(i=>(i/COLS)|0))].sort((a,b)=>a-b);
-    let t=t0;
-    for(const r of rows){
-      let rate=0; for(const c in low) if(low[c]>=r) rate+=absorb[c];
-      if(!rate) break;                                  // kivipohja: loput vedestä pysyy
-      const cells=comp.filter(i=>((i/COLS)|0)===r);
-      const a=Math.round(t); t+=cells.length*DRAIN/rate; const b=Math.round(t);
-      for(const i of cells){ drainA[i]=a; drainT[i]=b; }
-      for(const c in low) if(low[c]===r && bottom[c]>=0) mudT[bottom[c]]=b;
-      drainEnd=Math.max(drainEnd,b);
+    return best;
+  }
+  function snap(){
+    const a=new Uint8Array(N);
+    for(let i=0;i<N;i++) a[i]=wet[i] | (k-lastV[i]<=EMIT?2:0) | (mud[i]?4:0) | (k-lastH[i]<=EMIT?8:0);
+    return a;
+  }
+  function stepW(){
+    k++; tick=k*WSTEP;
+    // 1. painovoima alhaalta ylös: koko pylväs putoaa ruudun kerralla
+    for(let r=ROWS-1;r>=0;r--) for(let c=0;c<COLS;c++){ const i=r*COLS+c; if(!wet[i]) continue;
+      if(solidAt(i)){ wet[i]=0; continue; }
+      if(r+1>=ROWS){ wet[i]=0; continue; }
+      if(openAt(r+1,c)){ wet[i]=0; wet[i+COLS]=1; lastV[i+COLS]=k; } }
+    // 2. reunan yli valuva vesi lähtee liikkeelle
+    for(let r=ROWS-1;r>=0;r--) for(let c=0;c<COLS;c++){ const i=r*COLS+c; if(!wet[i]) continue;
+      const d=findDrop(r,c,1); if(d){ wet[i]=0; parcels.push({r,c,d}); } }
+    // 3. lähteet (veden alla oleva lähde nostaa vettä pintaan)
+    for(const s of srcs){ if(s.left<=0 || k<s.next) continue; s.next=k+EMIT;
+      let r=s.r; while(r>=0 && wet[r*COLS+s.c]) r--;
+      if(r>=0 && openAt(r,s.c)){ parcels.push({r,c:s.c,d:0}); s.left--; } }
+    // 4. liikkuvat vesiruudut
+    const next=[];
+    for(const p of parcels){
+      let r=p.r, c=p.c;
+      while(r>=0 && wet[r*COLS+c]) r--;                       // toinen ehti asettua samaan ruutuun: nouse pintaan
+      if(r<0 || solidAt(r*COLS+c)) continue;
+      if(r+1>=ROWS) continue;                                 // valui ulos kentästä
+      if(openAt(r+1,c)){ p.r=r+1; p.c=c; lastV[(r+1)*COLS+c]=k; next.push(p); continue; }
+      const d=findDrop(r,c,p.d||1);
+      if(d){ p.r=r; p.c=c+d; p.d=d; lastH[r*COLS+c+d]=k; lastH[r*COLS+c]=k; next.push(p); continue; }
+      wet[r*COLS+c]=1;                                        // asettuu
+    }
+    parcels=next;
+    // 5. maa imee
+    for(let i=COLS;i<N;i++){
+      if(g[i]!==EARTH || !wet[i-COLS]){ cnt[i]=0; continue; }
+      mud[i]=1;
+      let d=0; while(i+d*COLS<N && g[i+d*COLS]===EARTH) d++;
+      if(++cnt[i] < DS*d) continue;
+      cnt[i]=0;
+      // pinta laskee: poistetaan altaan ylin ruutu (lähin tästä sarakkeesta), jottei altaaseen jää reikiä
+      const c0=i%COLS, seen=new Set([i-COLS]), q=[i-COLS]; let j=i-COLS;
+      for(let n=0;n<q.length;n++){ const x=q[n], xr=(x/COLS)|0, xc=x%COLS, jr=(j/COLS)|0;
+        if(xr<jr || (xr===jr && Math.abs(xc-c0)<Math.abs(j%COLS-c0))) j=x;
+        for(const y of [x-COLS,x+COLS,xc>0?x-1:-1,xc<COLS-1?x+1:-1]) if(y>=0 && y<N && wet[y] && !seen.has(y)){ seen.add(y); q.push(y); } }
+      wet[j]=0;
+      const b=i+d*COLS, br=(b/COLS)|0, c=i%COLS;
+      if(br<ROWS && openAt(br,c)) parcels.push({r:br,c,d:0});           // tippuu maakerroksen alta
     }
   }
-  return {drainA,drainT,mudT,drainEnd};
+  const pending=()=> srcs.some(s=>s.left>0 && s.left!==Infinity) || tick<w.fireEnd || cnt.some(x=>x>0);
+  const S={snaps:[snap()], frozenAt:-1,
+    advance(kk){
+      while(this.frozenAt<0 && k<kk){
+        stepW(); const a=snap(), prev=this.snaps[this.snaps.length-1];
+        let same=true; for(let i=0;i<N;i++) if(a[i]!==prev[i]){ same=false; break; }
+        stable = same? stable+1 : 0; this.snaps.push(a);
+        if((stable>=W_STEADY && !pending()) || k>=W_HORIZON) this.frozenAt=k;
+      }
+    },
+    at(t){ const kk=Math.floor(t/WSTEP); this.advance(kk); return this.snaps[Math.min(kk,this.snaps.length-1)]; }
+  };
+  w.ws=S; return S;
 }
-// onko ruudussa vettä hetkellä t
-function wetAt(w,t,i){ return w.g[i]===WATER && (w.drainT[i]<0 || t<w.drainT[i]); }
-function mudAt(w,t,i){ return w.mudT[i]>=0 && t>=w.mudT[i]; }
+const NOWATER=new Uint8Array(COLS*ROWS);
+function waterAt(w,t){
+  if(!w.hasWater) return NOWATER;
+  const kk=Math.floor(Math.max(0,t)/WSTEP); if(w._wk===kk) return w._wa;
+  w._wk=kk; return (w._wa=wsim(w).at(kk*WSTEP));
+}
+// onko ruudussa vettä hetkellä t; muta = märkä maa, jonka päällä ei ole vettä
+function wetAt(w,t,i){ return (waterAt(w,t)[i]&1)===1; }
+function mudAt(w,t,i){ const a=waterAt(w,t); return (a[i]&4) && !(i>=COLS && (a[i-COLS]&1)); }
 
 function newState(w){
   return {x:w.start.x, y:w.start.y, m:0, jt:0, jd:0, peak:w.start.y, dv:0, dead:0, won:0, t:0, keys:0, cause:'', face:1};
@@ -197,7 +236,6 @@ function tileAt(w,s,r,c){
   if(r<0||r>=ROWS||c<0||c>=COLS) return E;
   const i=r*COLS+c, t=w.g[i];
   if(w.ign[i]>=0 && burnable(t) && s.t>=w.ign[i]+BURN) return E;
-  if(t===WATER && !wetAt(w,s.t,i)) return E;
   return t;
 }
 function burningAt(w,t,i){ return w.ign[i]>=0 && t>=w.ign[i] && t<w.ign[i]+BURN; }
@@ -355,6 +393,7 @@ function settled(w,s){ return s.m===0 || (s.m===3 && s.y===floatY(w,s)); }
 // Mahtuuko pala tähän? Muut palat huomioidaan.
 function freeFor(def, piece, others){
   const base=makeWorld(def,(others||[]).filter(o=>o && o.el!=='water'));
+  const src=new Set(base.sources.map(q=>q.r*COLS+q.c));
   const {g,keys}=base;
   const key=(r,c)=>keys.some(K=>K.r===r&&K.c===c);
   const cells=pieceCells(piece);
@@ -362,16 +401,17 @@ function freeFor(def, piece, others){
   if(piece.el==='earth') return cells.every(([r,c])=>{ const t=g[r*COLS+c]; return (t===E||t===WATER) && !key(r,c); });
   if(piece.el==='fire'){ const [r,c]=cells[0]; const t=g[r*COLS+c]; return (t===E||burnable(t)) && !key(r,c); }
   if(piece.el==='wind') return cells.every(([r,c])=>{ const t=g[r*COLS+c]; return t===E||t===WATER; });
-  if(piece.el==='water') return pour(g.slice(),piece.r,piece.c,piece.len,piece.h).length>0;
+  if(piece.el==='water'){ const [r,c]=cells[0], i=r*COLS+c; return g[i]===E && !src.has(i); }
   return false;
 }
-// veden lopulliset ruudut esikatselua varten
+// lähteen esikatselu: ruudut, joiden läpi vesi ensin putoaa
 function waterPreview(def, piece, others){
-  const w=makeWorld(def,(others||[]).filter(o=>o && o.el!=='water'));
-  return pour(w.g.slice(),piece.r,piece.c,piece.len,piece.h);
+  const w=makeWorld(def,(others||[]).filter(o=>o && o.el!=='water')), out=[];
+  for(let r=piece.r;r<ROWS;r++){ const i=r*COLS+piece.c; if(solid(w.g[i])) break; out.push(i); }
+  return out;
 }
 
-const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,DRAIN,wetAt,mudAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
-  parseLevel,makeWorld,newState,cloneS,step,freeFor,tileAt,burningAt,supportCols,guardPos,settled,pieceCells,pour,waterPreview,floatY,burnable};
+const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,DRAIN,WSTEP,wetAt,mudAt,waterAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
+  parseLevel,makeWorld,newState,cloneS,step,freeFor,tileAt,burningAt,supportCols,guardPos,settled,pieceCells,waterPreview,floatY,burnable};
 if(typeof module!=='undefined') module.exports=API;
 if(typeof self!=='undefined') self.PPEngine=API;

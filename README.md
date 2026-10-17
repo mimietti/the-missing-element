@@ -10,14 +10,16 @@ Pelaaja lisää sen oikeaan kohtaan, ja kenttä muuttuu läpäistäväksi.
   Tuuli nopeuttaa leviämistä tuulen suuntaan ja estää sen vastatuuleen. Palava ruutu on vaarallinen.
   Kenttään voi laittaa valmiiksi palavan puulattian `f` tai puuaidan `F`.
 - **Tuuli** siirtää: kolmen rivin korkuinen alue, joka työntää vasemmalle tai oikealle. Kovaa tuulta vastaan ei pääse.
-- **Vesi** pehmentää: valuu alimpaan kohtaan ja täyttää yhden altaan valittuun korkeuteen (rivejä tai täysi allas). Allas ei tulvi yli.
+- **Vesi** pehmentää: pelaajan vesi on **lähde**, joka virtaa koko ajan (tai editorissa valitun määrän ruutuja).
+  Vesi putoaa, liukuu pinnalla lähimmälle reunalle ja täyttää altaan. Täysi allas valuu matalamman reunansa yli.
+  Kivi ja puu pidättävät vettä, joten puuaidasta voi tehdä padon, jonka tuli polttaa.
+  Maa imee päällään olevaa vettä hitaasti (15 s ruutu per maakerroksen paksuusruutu). Imeytynyt vesi tippuu maakerroksen alta,
+  jos siellä on tyhjää; muuten se jää maahan. Märästä maasta tulee mutaa, jossa liikkuminen on hidasta.
+  Kentät kannattaa suunnitella niin, että vesi pääsee jonnekin, muuten lähde täyttää kentän vähitellen.
   Vähintään kahden ruudun syvyiseen veteen voi hypätä mistä korkeudesta tahansa; matalassa vedessä kahlataan.
-  Mitä korkeammalta hyppää, sitä syvemmälle uppoaa ennen pintaan nousua. Pohjan piikit jäävät veden alle ja ovat yhä vaarallisia.
-  Maapohjainen allas imee veden hitaasti: yhden ruudun paksuisen maapohjan läpi pinta laskee rivin noin 15 sekunnissa.
-  Paksumpi maa imee hitaammin (kaksi ruutua: 30 s), ja kivikohdat eivät ime lainkaan, joten osittain kivinen pohja on hitaampi
-  ja kokonaan kivinen allas pysyy täynnä. Imeytyminen alkaa veden kaatohetkestä. Kun vesi on mennyt läpi, pohjasta tulee mutaa,
-  jossa kävely ja hyppy ovat hitaita kuin kahlatessa.
+  Mitä korkeammalta hyppää, sitä syvemmälle uppoaa ennen pintaan nousua. Piikit ja avaimet näkyvät veden läpi.
   Uidessa liikutaan hitaasti, ja vedestä pääsee ylös reunalle, joka on enintään ruudun pinnan yläpuolella.
+  Editorissa: `w` seisova vesi alussa, `S` lähde kenttään.
 
 ## Sivut
 
