@@ -18,7 +18,8 @@ Pelaaja lisää sen oikeaan kohtaan, ja kenttä muuttuu läpäistäväksi.
   Kentät kannattaa suunnitella niin, että vesi pääsee jonnekin, muuten lähde täyttää kentän vähitellen.
   Vähintään kahden ruudun syvyiseen veteen voi hypätä mistä korkeudesta tahansa; matalassa vedessä kahlataan.
   Mitä korkeammalta hyppää, sitä syvemmälle uppoaa ennen pintaan nousua. Piikit ja avaimet näkyvät veden läpi.
-  Uidessa liikutaan hitaasti, ja vedestä pääsee ylös reunalle, joka on enintään ruudun pinnan yläpuolella.
+  Uidessa liikutaan hitaasti. Vedestä ei saa kunnon ponnistusta: hyppy nousee vain noin ruudun pinnan yläpuolelle
+  (maalta 2,5 ruutua), joten vedestä pääsee ylös reunalle, joka on enintään ruudun pinnan yläpuolella.
   Editorissa: `w` seisova vesi alussa, `S` lähde kenttään.
 
 ## Sivut

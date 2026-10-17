@@ -2,13 +2,16 @@
 // Yhteinen pelille, editorille ja ratkaisijalle.
 const U = 4;                 // yksikköä per ruutu
 const COLS = 28, ROWS = 16;
-const JUMP = [-2,-2,-2,-1,-1,-1,-1,0,0,1,1,1,1,2,2,2];
+const JUMP = [-2,-2,-2,-1,-1,-1,-1,0,0,1,1,1,1,2,2,2];       // maasta: nousee 10 yksikköä (2,5 ruutua)
+const JUMP_SWIM = [-2,-2,-1,-1,-1,-1,-1,0,1,1,1,1,1,2,2];     // vedestä ei saa ponnistusta: nousee 9 yksikköä
+                                                            // ja lähtee ruudun pinnan alta, joten yltää vain ruudun pinnan yläpuolelle
+const JUMPS = [JUMP, JUMP_SWIM];
 const MAXFALL = 20;          // yksikköä lakipisteestä; enemmän = kuolema
 const WALK_SP = 2;           // puoliyksikköä per tick
 const SWIM_SP = 1;           // uinti ja kahlaus: puolet kävelystä
 const WIND_SP = [0,1,3];     // tuulen työntö: heikko 1, kova 3 (kovempi kuin kävely, vastaan ei pääse)
 const FLOAT = 4;             // uidessa jalat ovat näin monta yksikköä pinnan alla
-const DIVE = 0.6;            // sukellus: uppoaa pinnan alle 0.6 × pudotuskorkeus
+const DIVE = 0.75;           // sukellus: uppoaa pinnan alle 0.75 × pudotuskorkeus
 const DIVE_MAX = 24;         // enintään 6 ruutua
 // tuli (tickejä, 20 tickiä = 1 s)
 const BURN = 50;             // kauanko ruutu palaa
@@ -365,20 +368,20 @@ function step(w,s,inp){
     else{
       const sp = (feetInWater(w,s)||onMud(w,s))? SWIM_SP : WALK_SP;
       if(inp.dir) s.face=inp.dir;
-      if(inp.jump){ s.m=1; s.jt=0; s.jd=inp.dir*sp; s.peak=s.y; }
+      if(inp.jump){ s.m=1; s.jt=0; s.js=0; s.jd=inp.dir*sp; s.peak=s.y; }
       else drift(w,s,inp.dir*sp+wsp,false);
     }
   }
   if(s.m===3){
     if(inp.dir) s.face=inp.dir;
-    if(inp.jump && s.dv<=0 && s.y===floatY(w,s)){ s.m=1; s.jt=0; s.jd=inp.dir*WALK_SP; s.peak=s.y; }
+    if(inp.jump && s.dv<=0 && s.y===floatY(w,s)){ s.m=1; s.jt=0; s.js=1; s.jd=inp.dir*WALK_SP; s.peak=s.y; }
     else{
       drift(w,s,inp.dir*SWIM_SP+wsp,true);
       const fy=floatY(w,s);
       if(fy===null){ s.m=2; s.peak=s.y; s.dv=0; }
       else if(s.dv>0){                                 // sukellus jatkuu, kunnes vauhti loppuu tai pohja tulee vastaan
-        s.dv--;
-        if(supportCols(w,s).length) s.dv=0; else s.y++;
+        const n = s.dv>8? 2 : 1;                       // alussa nopeasti, sitten hidastuen
+        for(let q=0;q<n;q++){ s.dv--; if(supportCols(w,s).length){ s.dv=0; break; } s.y++; }
       }
       else if(s.y<fy){ if(!supportCols(w,s).length) s.y++; }
       else if(s.y>fy && !blocked(w,s,s.x,s.y-1,false)) s.y--;
@@ -386,7 +389,7 @@ function step(w,s,inp){
     }
   }
   else if(s.m===1){
-    const dy=JUMP[s.jt++];
+    const J=JUMPS[s.js||0], dy=J[s.jt++];
     const jdir=Math.sign(s.jd), n=halfSteps(Math.abs(s.jd),s.jt);
     for(let k=0;k<n;k++) if(!blocked(w,s,s.x+jdir,s.y)) s.x+=jdir;
     drift(w,s,wsp,false);
@@ -399,7 +402,7 @@ function step(w,s,inp){
     } else if(dy>0){
       for(let k=0;k<dy;k++) if(fallUnit(w,s)) break;
     }
-    if(s.m===1 && s.jt>=JUMP.length) s.m=2;
+    if(s.m===1 && s.jt>=J.length) s.m=2;
   } else if(s.m===2){
     drift(w,s,wsp,false);
     for(let k=0;k<2;k++) if(fallUnit(w,s)) break;
