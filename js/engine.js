@@ -152,6 +152,20 @@ function wsim(w){
     }
     return best;
   }
+  // Asettuva vesi täyttää altaan alhaalta: haetaan veden kautta yhteydessä oleva alin vapaa ruutu
+  // (ei aloitusriviä ylempää), tasatilanteessa lähin sarake. Näin pinta nousee rivi kerrallaan ilman aukkoja.
+  function lowestHole(r0,c0){
+    const start=r0*COLS+c0, seen=new Set([start]), q=[start]; let best=start;
+    const better=(j)=>{ const jr=(j/COLS)|0, br=(best/COLS)|0; return jr>br || (jr===br && Math.abs(j%COLS-c0)<Math.abs(best%COLS-c0)); };
+    for(let n=0;n<q.length;n++){ const x=q[n], xr=(x/COLS)|0, xc=x%COLS;
+      for(const [rr,cc] of [[xr+1,xc],[xr,xc-1],[xr,xc+1],[xr-1,xc]]){
+        if(rr<r0||rr>=ROWS||cc<0||cc>=COLS) continue; const j=rr*COLS+cc;
+        if(seen.has(j) || solidAt(j)) continue; seen.add(j);
+        if(wet[j]) q.push(j);                         // kulkee veden läpi
+        else if(better(j)) best=j;                    // vapaa ruutu veden reunalla
+      } }
+    return best;
+  }
   function snap(){
     const a=new Uint8Array(N);
     for(let i=0;i<N;i++) a[i]=wet[i] | (k-lastV[i]<=EMIT?2:0) | (mud[i]?4:0) | (k-lastH[i]<=EMIT?8:0);
@@ -181,7 +195,7 @@ function wsim(w){
       if(openAt(r+1,c)){ p.r=r+1; p.c=c; lastV[(r+1)*COLS+c]=k; next.push(p); continue; }
       const d=findDrop(r,c,p.d||1);
       if(d){ p.r=r; p.c=c+d; p.d=d; lastH[r*COLS+c+d]=k; lastH[r*COLS+c]=k; next.push(p); continue; }
-      wet[r*COLS+c]=1;                                        // asettuu
+      wet[lowestHole(r,c)]=1;                                 // asettuu altaan alimpaan vapaaseen kohtaan
     }
     parcels=next;
     // 5. maa imee

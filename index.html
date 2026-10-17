@@ -450,13 +450,8 @@ function drawWater(alpha){
   const wa=waterRawAt(world,st.t);
   const wet=(r,c)=> r>=0&&r<ROWS&&c>=0&&c<COLS&&(wa[r*COLS+c]&1);
   const solidNow=(r,c)=>{ if(r<0||r>=ROWS||c<0||c>=COLS) return true; const i=r*COLS+c, t=world.g[i]; return (t===EARTH||t===WALL||t===WOOD)&&!gone(i); };
-  for(let i=0;i<wa.length;i++){ const v=wa[i]; if(!(v&10) || (v&1)) continue;
-    const x=(i%COLS)*ts, y=((i/COLS)|0)*ts;
-    if(v&2) A.stream(ctx,x,y,ts,{v:true,frame,alpha});
-    if(v&8) A.stream(ctx,x,y,ts,{v:false,frame,alpha});
-  }
   // vajaa pintarivi piirretään tasaisena kerroksena koko altaan levyltä, muuten ruuduittain
-  const film=new Uint8Array(COLS*ROWS);
+  const film=new Uint8Array(COLS*ROWS), filmY=new Float32Array(COLS*ROWS);
   for(let r=0;r<ROWS;r++){ let c=0;
     while(c<COLS){
       if(solidNow(r,c)){ c++; continue; }
@@ -464,11 +459,19 @@ function drawWater(alpha){
       let n=0, held=true, top=true;
       for(let x=c;x<=c1;x++){ if(wet(r,x)) n++; if(!(r+1>=ROWS||solidNow(r+1,x)||wet(r+1,x))) held=false; if(wet(r-1,x)) top=false; }
       const W=c1-c+1;
-      if(n && n<W && held && top){ const h=ts*n/W; A.water(ctx,c*ts,(r+1)*ts-h,ts,{w:W*ts,h,surface:true,frame,alpha}); for(let x=c;x<=c1;x++) film[r*COLS+x]=1; }
+      if(n && n<W && held && top){ const h=ts*n/W; A.water(ctx,c*ts,(r+1)*ts-h,ts,{w:W*ts,h,surface:true,frame,alpha}); for(let x=c;x<=c1;x++){ film[r*COLS+x]=1; filmY[r*COLS+x]=(r+1)*ts-h; } }
       else for(let x=c;x<=c1;x++) if(wet(r,x)){ const i=r*COLS+x, wv=world.wind[i]||(r>0?world.wind[i-COLS]:0);
         A.water(ctx,x*ts,r*ts,ts,{surface:!wet(r-1,x) && !(r>0 && film[i-COLS]), frame, wind:wv, alpha}); }
       c=c1+1;
     }
+  }
+  // virtaava vesi; altaan pinnalla ja tasaisen kerroksen sisällä virtaa ei piirretä erikseen
+  for(let i=0;i<wa.length;i++){ const v=wa[i]; if(!(v&10) || (v&1)) continue;
+    const x=(i%COLS)*ts, y=((i/COLS)|0)*ts, under=i+COLS<wa.length && ((wa[i+COLS]&1) || film[i+COLS]);
+    if(film[i]){ if(i>=COLS && (wa[i-COLS]&2) && !(wa[i-COLS]&1)){ ctx.save(); ctx.beginPath(); ctx.rect(x,y,ts,filmY[i]-y+ts*.1); ctx.clip(); A.stream(ctx,x,y,ts,{v:true,frame,alpha}); ctx.restore(); } continue; }   // putoava vesi päättyy pintaan
+    if(v&2){ A.stream(ctx,x,y,ts,{v:true,frame,alpha});
+      const j=i+COLS; if(j<wa.length && film[j] && !(wa[j]&2)){ ctx.save(); ctx.beginPath(); ctx.rect(x,y+ts,ts,filmY[j]-y-ts+ts*.1); ctx.clip(); A.stream(ctx,x,y+ts,ts,{v:true,frame,alpha}); ctx.restore(); } }
+    if((v&8) && !under) A.stream(ctx,x,y,ts,{v:false,frame,alpha});
   }
 }
 function drawSources(){ for(const q of world.sources) A.source(ctx,q.c*ts,q.r*ts,ts,frame); }
