@@ -27,16 +27,18 @@ const W_HORIZON = 3000;      // simulaation yläraja (5 min), sen jälkeen tilan
 const halfSteps=(sp,t)=>Math.floor(t*sp/2)-Math.floor((t-1)*sp/2);
 
 // ruutukoodit
-const E=0, EARTH=1, WALL=2, WOOD=3, FENCE=4, SPIKE=6, EXIT=7, WATER=8;
-const CH = {'=':EARTH,'#':WALL,'-':WOOD,'H':FENCE,'^':SPIKE,'E':EXIT,'f':WOOD,'F':FENCE};
+const E=0, EARTH=1, WALL=2, WOOD=3, LADDER=4, SPIKE=6, EXIT=7, WATER=8;
+const FENCE=LADDER;           // vanha nimi (puuaita korvattiin tikkailla)
+const CLIMB_SP=1;            // kiipeäminen: puoliyksikköä per tick (puolet kävelystä)
+const CH = {'=':EARTH,'#':WALL,'-':WOOD,'H':LADDER,'^':SPIKE,'E':EXIT,'f':WOOD,'F':LADDER};
 // w = paikallaan oleva vesi alussa, S = lähde (virtaa koko ajan). Vesi on omassa kerroksessaan, ei ruudukossa.
-const FIRECH = {'f':1,'F':1};   // valmiiksi palava puulattia / puuaita
+const FIRECH = {'f':1,'F':1};   // valmiiksi palava puulattia / tikkaat
 const WINDCH = {'<':-1,'>':1,'[':-2,']':2};
 const ELEMENTS = ['earth','fire','wind','water'];
 const WIND_H = 3;            // tuulipalan korkeus ruutuina (rivit r-2..r)
 
-const solid = t => t===EARTH||t===WALL||t===WOOD||t===FENCE;   // vettä pidättävä
-const burnable = t => t===WOOD||t===FENCE;
+const solid = t => t===EARTH||t===WALL||t===WOOD;   // vettä pidättävä (tikkaiden läpi vesi valuu)
+const burnable = t => t===WOOD||t===LADDER;
 
 function parseLevel(def){
   const g = new Uint8Array(COLS*ROWS), wind = new Int8Array(COLS*ROWS);
@@ -262,22 +264,31 @@ function tileAt(w,s,r,c){
   return t;
 }
 function burningAt(w,t,i){ return w.ign[i]>=0 && t>=w.ign[i] && t<w.ign[i]+BURN; }
-const standable = t => t===EARTH||t===WALL||t===WOOD||t===FENCE;
+const standable = t => t===EARTH||t===WALL||t===WOOD;
 
 function supportCols(w,s){
   if(s.y%U) return [];
   const r=s.y/U, c0=s.x>>2, c1=(s.x+U-1)>>2, out=[];
-  for(let c=c0;c<=c1;c++) if(standable(tileAt(w,s,r,c))) out.push(c);
+  for(let c=c0;c<=c1;c++){ const t=tileAt(w,s,r,c);
+    if(standable(t) || (t===LADDER && tileAt(w,s,r-1,c)!==LADDER)) out.push(c); }   // tikkaiden päällä voi seistä
   return out;
 }
-// kivi, maa ja puuaita ovat kiinteitä: niiden sisään ei voi kävellä eikä hypätä, vain päälle.
-// Puulattian läpi voi hypätä alhaalta; uidessa sekin estää (altaan reunat).
+// tikkaat: tarttuminen keskimmäisestä sarakkeesta. v -1 = ylös, 1 = alas
+function ladderAt(w,s,r,c){ return tileAt(w,s,r,c)===LADDER; }
+function canClimb(w,s,v){
+  if(!v) return false; const c=(s.x+2)>>2, rf=Math.floor((s.y-1)/U), rb=Math.floor((s.y-5)/U);
+  if(v<0) return ladderAt(w,s,rf,c) || ladderAt(w,s,rb,c);
+  return ladderAt(w,s,rf,c) || (s.y%U===0 && ladderAt(w,s,s.y/U,c));
+}
+function onLadder(w,s){ return canClimb(w,s,-1) || canClimb(w,s,1); }
+// kivi ja maa ovat kiinteitä: niiden sisään ei voi kävellä eikä hypätä, vain päälle.
+// Puulattian läpi voi hypätä alhaalta; uidessa sekin estää (altaan reunat). Tikkaiden läpi kuljetaan.
 function blocked(w,s,x,y,swim){
   if(x<0 || x+U>COLS*U) return true;
   const r0=Math.floor((y-8)/U), r1=Math.floor((y-1)/U), c0=x>>2, c1=(x+U-1)>>2;
   for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++){
     const t=tileAt(w,s,r,c);
-    if(t===WALL||t===FENCE||t===EARTH) return true;
+    if(t===WALL||t===EARTH) return true;
     if(swim && t===WOOD) return true;
   }
   return false;
@@ -355,12 +366,39 @@ function checkHazards(w,s){
   if(atExit && s.keys===w.allKeys) s.won=1;
 }
 
-// input: {dir:-1|0|1, jump:bool}
-// tilat: m=0 maassa, 1 hyppy, 2 putoaa, 3 ui
+// input: {dir:-1|0|1, jump:bool, v:-1|0|1 (ylös/alas tikkailla)}
+// tilat: m=0 maassa, 1 hyppy, 2 putoaa, 3 ui, 4 kiipeää
 function step(w,s,inp){
   if(s.dead||s.won) return s;
   s.t++;
   const wv=windOn(w,s), wsp=Math.sign(wv)*WIND_SP[Math.abs(wv)];
+  if(s.m!==4 && inp.v && !(s.m===0 && inp.jump) && canClimb(w,s,inp.v)){   // tarttuu tikkaisiin (myös ilmassa ja vedessä)
+    s.m=4; s.x=((s.x+2)>>2)*U; s.dv=0; s.peak=s.y;
+  }
+  if(s.m===4){
+    const c=s.x>>2;
+    if(inp.dir) s.face=inp.dir;
+    if(inp.jump){ s.m=1; s.jt=0; s.js=0; s.jd=inp.dir*WALK_SP; s.peak=s.y; }      // hyppy irti tikkailta
+    else if(inp.dir){ s.peak=s.y; s.m= supportCols(w,s).length? 0 : 2; drift(w,s,inp.dir*WALK_SP,false); checkHazards(w,s); return s; }   // astuu sivuun
+    else if(inp.v){
+      const n=halfSteps(CLIMB_SP,s.t);
+      for(let k=0;k<n && s.m===4;k++){
+        if(inp.v<0){
+          if(!(ladderAt(w,s,Math.floor((s.y-1)/U),c) || ladderAt(w,s,Math.floor((s.y-5)/U),c)) || blocked(w,s,s.x,s.y-1,false)){
+            if(supportCols(w,s).length) s.m=0;           // ylhäällä: seisoo tikkaiden päällä
+            break; }
+          s.y--;
+        } else {
+          if(s.y%U===0 && !ladderAt(w,s,s.y/U,c)){       // tikkaat loppuvat jalkojen alta
+            if(supportCols(w,s).length) s.m=0; else { s.m=2; s.peak=s.y; }
+            break; }
+          s.y++;
+        }
+      }
+    }
+    if(s.m===4 && !onLadder(w,s)){ s.m=2; s.peak=s.y; }  // tikkaat paloivat
+    if(s.m===4){ checkHazards(w,s); return s; }
+  }
   if(s.m===0){
     const sup=supportCols(w,s);
     if(!sup.length){ s.m=2; s.peak=s.y; }
@@ -411,7 +449,7 @@ function step(w,s,inp){
   return s;
 }
 // lepotila: seisoo tai kelluu pinnalla
-function settled(w,s){ return s.m===0 || (s.m===3 && s.y===floatY(w,s)); }
+function settled(w,s){ return s.m===0 || s.m===4 || (s.m===3 && s.y===floatY(w,s)); }
 
 // Mahtuuko pala tähän? Muut palat huomioidaan.
 function freeFor(def, piece, others){
@@ -434,7 +472,7 @@ function waterPreview(def, piece, others){
   return out;
 }
 
-const API={U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,DRAIN,WSTEP,wetAt,mudAt,waterAt,waterRawAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
+const API={LADDER,canClimb,onLadder,U,COLS,ROWS,JUMP,MAXFALL,BURN,FIRECH,DRAIN,WSTEP,wetAt,mudAt,waterAt,waterRawAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,CH,WINDCH,ELEMENTS,
   parseLevel,makeWorld,newState,cloneS,step,freeFor,tileAt,burningAt,supportCols,guardPos,settled,pieceCells,waterPreview,floatY,burnable};
 if(typeof module!=='undefined') module.exports=API;
 if(typeof self!=='undefined') self.PPEngine=API;

@@ -6,13 +6,15 @@ Pelaaja lisää sen oikeaan kohtaan, ja kenttä muuttuu läpäistäväksi.
 ## Elementit
 
 - **Maa** lisää: pala lattiaa. Maa on kiinteää: sen sisään ei voi kävellä eikä hypätä, vain päälle. Puulattian läpi voi hypätä alhaalta.
-- **Tuli** poistaa: polttaa puun (puulattia `-`, puuaita `H`). Naapuri syttyy ylöspäin 1 sekunnissa, sivulle 2 sekunnissa, alas ei lainkaan.
+- **Tuli** poistaa: polttaa puun (puulattia `-`, tikkaat `H`). Naapuri syttyy ylöspäin 1 sekunnissa, sivulle 2 sekunnissa, alas ei lainkaan.
   Tuuli nopeuttaa leviämistä tuulen suuntaan ja estää sen vastatuuleen. Palava ruutu on vaarallinen.
-  Kenttään voi laittaa valmiiksi palavan puulattian `f` tai puuaidan `F`.
+  Kenttään voi laittaa valmiiksi palavan puulattian `f` tai palavat tikkaat `F`.
+- **Tikkaat** `H`: niiden läpi kuljetaan, niitä pitkin kiivetään ylös ja alas (nuolet ylös/alas tai ▲▼-napit), ja ylimmän askelman päällä voi seistä.
+  Tikkailta pääsee astumalla sivuun tai hyppäämällä. Ilmassa ja vedessä tikkaisiin voi tarttua. Tuli polttaa tikkaat.
 - **Tuuli** siirtää: kolmen rivin korkuinen alue, joka työntää vasemmalle tai oikealle. Kovaa tuulta vastaan ei pääse.
 - **Vesi** pehmentää: pelaajan vesi on **lähde**, joka virtaa koko ajan (tai editorissa valitun määrän ruutuja).
   Vesi putoaa, liukuu pinnalla lähimmälle reunalle ja täyttää altaan. Täysi allas valuu matalamman reunansa yli.
-  Kivi ja puu pidättävät vettä, joten puuaidasta voi tehdä padon, jonka tuli polttaa.
+  Kivi ja puulattia pidättävät vettä, joten puulattiasta voi tehdä altaan pohjan, jonka tuli polttaa. Tikkaiden läpi vesi valuu.
   Maa imee päällään olevaa vettä hitaasti (15 s ruutu per maakerroksen paksuusruutu). Imeytynyt vesi tippuu maakerroksen alta,
   jos siellä on tyhjää; muuten se jää maahan. Märästä maasta tulee mutaa, jossa liikkuminen on hidasta.
   Kentät kannattaa suunnitella niin, että vesi pääsee jonnekin, muuten lähde täyttää kentän vähitellen.
@@ -24,7 +26,7 @@ Pelaaja lisää sen oikeaan kohtaan, ja kenttä muuttuu läpäistäväksi.
 
 ## Sivut
 
-- `index.html`: peli. Kosketusohjaus iPadille, näppäimistö (nuolet, välilyönti, R, 1–4) tietokoneella.
+- `index.html`: peli. Kosketusohjaus iPadille (▲▼ näkyvät, kun kentässä on tikkaat), näppäimistö (nuolet, välilyönti = hyppy, ylös hyppää jos tikkaita ei ole, R, 1–4) tietokoneella.
 - `editor.html`: kenttäeditori. Piirrä kenttä, valitse tarjolla olevat elementit ja niiden ratkaisupaikat, testaa ja tarkista.
   Omat kentät tallentuvat selaimeen ja näkyvät pelin Kentät-valikossa kohdassa Omat kentät.
 

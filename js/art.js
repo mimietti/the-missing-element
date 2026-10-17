@@ -58,16 +58,15 @@ const ART = (function(){
     g.beginPath(); g.moveTo(x+s*.5,y+1); g.lineTo(x+s*.5,y+h-1); g.moveTo(x+s*.06,y+h*.55); g.lineTo(x+s*.4,y+h*.55); g.stroke();
     g.fillStyle=C.woodDark; g.beginPath(); g.arc(x+s*.12,y+h*.3,s*.025,0,7); g.arc(x+s*.88,y+h*.3,s*.025,0,7); g.fill();
   }
-  function fence(g,x,y,s,o={}){
+  // tikkaat: kaksi puista sivupuuta ja kaksi askelmaa ruutua kohti; o.top = ylin ruutu (sivupuut pyöristyvät)
+  function ladder(g,x,y,s,o={}){
     const ch=o.char||0, col= ch? mix(C.wood,C.char,Math.min(1,ch)) : C.wood, dk= ch? mix(C.woodDark,C.char,Math.min(1,ch)) : C.woodDark;
-    g.fillStyle=dk; g.fillRect(x+s*.04,y+s*.22,s*.92,s*.12); g.fillRect(x+s*.04,y+s*.68,s*.92,s*.12);
-    for(const px of [.12,.56]){
-      g.fillStyle=col; const w=s*.32;
-      if(o.top){ g.beginPath(); g.moveTo(x+s*px,y+s); g.lineTo(x+s*px,y+s*.18); g.lineTo(x+s*px+w/2,y+s*.02); g.lineTo(x+s*px+w,y+s*.18); g.lineTo(x+s*px+w,y+s); g.fill(); }
-      else g.fillRect(x+s*px,y,w,s+.5);
-      g.strokeStyle=dk; g.lineWidth=1; g.beginPath(); g.moveTo(x+s*px+w*.5,y+s*.3); g.lineTo(x+s*px+w*.5,y+s*.9); g.stroke();
-    }
+    const rw=s*.11, y0= o.top? y+s*.06 : y;
+    g.fillStyle=dk; for(const yy of [.3,.78]) g.fillRect(x+s*.2,y+s*yy,s*.6,s*.09);
+    g.fillStyle=col;
+    for(const px of [.14,.75]){ rr(g,x+s*px,y0,rw,y+s+.5-y0,o.top? rw/2 : 0); g.fill(); }
   }
+  const fence=ladder;
   function spike(g,x,y,s){
     const n=3,w=s/n;
     for(let k=0;k<n;k++){ g.fillStyle=C.ink; g.beginPath(); g.moveTo(x+k*w,y+s); g.lineTo(x+k*w+w/2,y+s*.48); g.lineTo(x+(k+1)*w,y+s); g.fill();
@@ -177,6 +176,6 @@ const ART = (function(){
       g.strokeStyle=C.waterHi; g.lineWidth=Math.max(1.5,s*.05); g.beginPath(); g.arc(cx,y+s*.66,s*.2,Math.PI*.95,Math.PI*1.35); g.stroke(); }
     g.globalAlpha=1;
   }
-  return {C,rr,hash,mix,stone,earth,wood,fence,spike,water,stream,source,flame,grass,wind,key,icon};
+  return {C,rr,hash,mix,stone,earth,wood,fence,ladder,spike,water,stream,source,flame,grass,wind,key,icon};
 })();
 if(typeof module!=='undefined') module.exports=ART;

@@ -2,7 +2,7 @@
 // Toimii Nodessa (require) ja selaimen workerissa (importScripts).
 const PPSolver = (function(){
   const ENG = (typeof module!=='undefined' && typeof require!=='undefined') ? require('./engine.js') : self.PPEngine;
-  const {ROWS,COLS,makeWorld,newState,cloneS,step,freeFor,settled,WIND_H} = ENG;
+  const {ROWS,COLS,U,makeWorld,newState,cloneS,step,freeFor,settled,canClimb,WIND_H} = ENG;
   const NOIN={dir:0,jump:false};
   const gcd=(a,b)=>b?gcd(b,a%b):a, lcm=(a,b)=>a/gcd(a,b)*b;
 
@@ -32,9 +32,26 @@ const PPSolver = (function(){
       if(cnt>limit) return null;
       if(timeDep || w.hasWind){ const t=cloneS(node); step(w,t,NOIN); air(t); if(push(t)) break; }
       let stop=false;
+      // tikkaat: kiipeä ylös tai alas, jokainen ruudun raja on oma pysähdyspaikka
+      for(const v of [-1,1]){
+        if(stop || !(node.m===4 || canClimb(w,node,v))) continue;
+        let s=cloneS(node), lastY=-1, still=0;
+        for(let i=0;i<400;i++){
+          step(w,s,{dir:0,jump:false,v});
+          if(s.dead) break;
+          if(s.won){ push(s); stop=true; break; }
+          if(!rest(s)){ air(s); if(push(s)) stop=true; break; }
+          if(s.m!==4 || s.y%U===0){ if(push(cloneS(s))){ stop=true; break; } }
+          if(s.m!==4) break;
+          if(s.y===lastY){ if(++still>2) break; } else still=0;   // kiipeää joka toisella tickillä
+          lastY=s.y;
+        }
+      }
+      if(stop) break;
       for(const d of [-1,1]){
         let s=cloneS(node), lastX=-1;
         for(let i=0;i<200;i++){
+          if(s.m===0 && (canClimb(w,s,-1)||canClimb(w,s,1)) && push(cloneS(s))){ stop=true; break; }   // tikkaiden kohta on oma solmu
           for(const j of [-1,0,1]){ const t=cloneS(s); step(w,t,{dir:j,jump:true}); air(t); if(push(t)){stop=true;break;} }
           if(stop) break;
           const k0=s.keys, m0=s.m;

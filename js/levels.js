@@ -1,5 +1,5 @@
 // The Missing Element: kentät.
-// Merkit: # kivi  = maa  - puulattia  H puuaita  f palava puulattia  F palava puuaita  w vesi  < > tuuli  [ ] kova tuuli  ^ piikki  k avain  E ovi  P aloitus
+// Merkit: # kivi  = maa  - puulattia  H tikkaat  f palava puulattia  F palavat tikkaat  S lähde  w vesi  < > tuuli  [ ] kova tuuli  ^ piikki  k avain  E ovi  P aloitus
 // pieces: tarjolla olevat elementit {el:'earth'|'fire'|'wind'|'water', len, dir, strong, len (vesi: lähteen määrä ruutuina, puuttuu = virtaa koko ajan)}, sol: tarkistettu ratkaisu
 // guards: r = rivi jolla vartija kävelee, c0..c1 reitti, dir 1 = aloittaa vasemmalta
 const LEVELS = [
@@ -30,26 +30,26 @@ const LEVELS = [
 },
 {
   "name": "Tuli",
-  "hint": "Tuli polttaa puun. Liekit nousevat ylöspäin.",
-  "en": {"name": "Fire", "hint": "Fire burns wood. Flames climb upwards."},
+  "hint": "Avain on lattian alla. Tuli polttaa puun.",
+  "en": {"name": "Fire", "hint": "The key is under the floor. Fire burns wood."},
   "pieces": [{"el": "fire"}],
-  "sol": [{"r": 13, "c": 15}],
+  "sol": [{"r": 13, "c": 11}],
   "map": [
     "############################",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#..............H...........#",
-    "#.....k........H...........#",
-    "#..............H...........#",
-    "#.P............H........E..#",
-    "#==========================#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#..........................#",
+    "#.P.....................E..#",
+    "#==========--==============#",
+    "#==========.k==============#",
     "############################"
   ]
 },

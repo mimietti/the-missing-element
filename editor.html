@@ -219,9 +219,9 @@ function drawCell(g,ch,x,y,s,o={}){
   if(ch==='='){ A.earth(g,x,y+oy,s,{full:!o.icon&&o.full, covered:o.covered, seed:o.seed||.3, l:!!o.el, r:!!o.er}); }
   else if(ch==='#') A.stone(g,x,y,s,o.r||0);
   else if(ch==='-') A.wood(g,x,y+oy,s);
-  else if(ch==='H') A.fence(g,x,y,s,{top:o.icon||o.top});
+  else if(ch==='H') A.ladder(g,x,y,s,{top:o.icon||o.top});
   else if(ch==='f'){ A.wood(g,x,y+oy,s); A.flame(g,x,y+oy-s*.7,s,0,.4,.8); }
-  else if(ch==='F'){ A.fence(g,x,y,s,{top:o.icon||o.top}); A.flame(g,x,y,s,0,.6,.8); }
+  else if(ch==='F'){ A.ladder(g,x,y,s,{top:o.icon||o.top}); A.flame(g,x,y,s,0,.6,.8); }
   else if(ch==='w') A.water(g,x,y,s,{surface:o.icon||o.surface,alpha:.6});
   else if(ch==='S'){ if(o.icon){ g.fillStyle=C.bg; g.fillRect(x,y,s,s); } A.source(g,x,y,s,0); A.stream(g,x+s*.275,y+s*.55,s*.45,{v:true,alpha:.6}); }
   else if(WINDV[ch]){ A.wind(g,x,y,s,WINDV[ch],0,o.seed||.5); windArrow(g,x,y,s,WINDV[ch]); }

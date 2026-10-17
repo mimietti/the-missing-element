@@ -78,6 +78,9 @@ button:disabled{opacity:.4}
 .pad{display:flex;gap:12px}
 .ctl{width:min(110px,22vw);height:min(84px,13vh);min-height:52px;border-radius:18px;font-size:28px;background:var(--paper);display:flex;align-items:center;justify-content:center}
 .ctl.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.climb{display:flex;flex-direction:column;gap:8px}
+.ctl.small{height:min(40px,6vh);min-height:36px;font-size:20px}
+.climb[hidden]{display:none}
 .ctl.jump{width:min(200px,34vw);font-size:18px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
 .placebar{display:flex;gap:10px;align-items:center;flex:1;justify-content:center;flex-wrap:wrap}
 .placebar .msg{font-size:16px;color:var(--mute)}
@@ -108,6 +111,10 @@ button:disabled{opacity:.4}
     <div class="pad" id="movePad">
       <button class="ctl" id="bL" data-i18n-aria="left">◀</button>
       <button class="ctl" id="bR" data-i18n-aria="right">▶</button>
+      <div class="climb" id="climbPad" hidden>
+        <button class="ctl small" id="bU" data-i18n-aria="up">▲</button>
+        <button class="ctl small" id="bD" data-i18n-aria="down">▼</button>
+      </div>
     </div>
     <div class="placebar" id="placeBar" hidden>
       <span class="msg" id="placeMsg"></span>
@@ -125,7 +132,7 @@ button:disabled{opacity:.4}
 <script src="js/levels.js"></script>
 <script>
 (()=>{
-const {U,COLS,ROWS,MAXFALL,BURN,wetAt,mudAt,waterAt,waterRawAt,WIND_H,E,EARTH,WALL,WOOD,FENCE,SPIKE,EXIT,WATER,ELEMENTS,
+const {U,COLS,ROWS,MAXFALL,BURN,wetAt,mudAt,waterAt,waterRawAt,WIND_H,E,EARTH,WALL,WOOD,LADDER,SPIKE,EXIT,WATER,ELEMENTS,canClimb,
   makeWorld,newState,step,freeFor,guardPos,pieceCells,waterPreview,burnable}=PPEngine;
 const $=id=>document.getElementById(id);
 const board=$('board'), ctx=board.getContext('2d');
@@ -149,8 +156,8 @@ let progress=0, saved={};
 try{ progress=+localStorage.getItem('tme-progress')||0; saved=JSON.parse(localStorage.getItem('tme-pieces')||'{}')||{}; }catch(e){}
 function persist(){ try{ if(!TEST) localStorage.setItem('tme-progress',String(progress)); saved[levelKey(def)]=placed; localStorage.setItem('tme-pieces',JSON.stringify(saved)); }catch(e){} }
 
-let li=0, def, world, st, prev, placed=[], fireT0={}, mode='play', edit=null, deadT=0, frame=0;
-const held={L:false,R:false,J:false}; let jumpLatch=false;
+let upEdge=false, li=0, def, world, st, prev, placed=[], fireT0={}, mode='play', edit=null, deadT=0, frame=0;
+const held={L:false,R:false,J:false,U:false,D:false}; let jumpLatch=false;
 
 const samePiece=(a,b)=>a.el===b.el && (a.len||0)===(b.len||0) && (a.h||0)===(b.h||0) && (a.dir||0)===(b.dir||0) && !!a.strong===!!b.strong;
 function loadLevel(i){
@@ -172,6 +179,7 @@ function restart(){
   landAt=jumpAt=-1e9; exitT=-1; fireT0={};
   world=makeWorld(def,worldPieces()); st=newState(world); prev={x:st.x,y:st.y};
   mode='play'; deadT=0; edit=null; hideOverlay(); setPlaceUI(false); updateTray(); updateKeys();
+  $('climbPad').hidden = !world.g.includes(LADDER);   // ylös/alas-napit vain kentissä, joissa on tikkaita
 }
 function rebuildWorld(){ world=makeWorld(def,worldPieces()); }
 function updateKeys(){ const n=world.keys.length, got=world.keys.filter((_,i)=>st.keys>>i&1).length; $('keys').textContent = n? T('keys',{got,n}) : ''; }
@@ -258,7 +266,7 @@ function bindHold(id,key){
   el.addEventListener('pointerdown',down); el.addEventListener('pointerup',up);
   el.addEventListener('pointercancel',up); el.addEventListener('lostpointercapture',up);
 }
-bindHold('bL','L'); bindHold('bR','R'); bindHold('bJ','J');
+bindHold('bL','L'); bindHold('bR','R'); bindHold('bJ','J'); bindHold('bU','U'); bindHold('bD','D');
 const tap=(id,fn)=>$(id).addEventListener('click',fn);
 if(navigator.standalone || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches) $('fsBtn').hidden=true;
 tap('fsBtn',()=>{
@@ -275,9 +283,9 @@ tap('restartBtn',restart); tap('menuBtn',showMenu);
 tap('placeBtn',commitPlace); tap('cancelBtn',cancelPlace); tap('removeBtn',removePiece);
 document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
-const KEYS={ArrowLeft:'L',KeyA:'L',ArrowRight:'R',KeyD:'R',ArrowUp:'J',KeyW:'J',Space:'J'};
+const KEYS={ArrowLeft:'L',KeyA:'L',ArrowRight:'R',KeyD:'R',ArrowUp:'U',KeyW:'U',ArrowDown:'D',KeyS:'D',Space:'J'};
 addEventListener('keydown',e=>{
-  if(KEYS[e.code]){ e.preventDefault(); if(mode==='place') return; held[KEYS[e.code]]=true; if(KEYS[e.code]==='J') jumpLatch=true; }
+  if(KEYS[e.code]){ e.preventDefault(); if(mode==='place') return; if(KEYS[e.code]==='U' && !held.U) upEdge=true; held[KEYS[e.code]]=true; if(KEYS[e.code]==='J') jumpLatch=true; }
   else if(e.code==='KeyR') restart();
   else if(e.code==='Enter' && mode==='place') commitPlace();
   else if(e.code==='Escape' && mode==='place') cancelPlace();
@@ -324,14 +332,16 @@ const EX={fly:450, turn:750, open:1150, enter:1650, end:1900};
 const clamp01=v=>Math.max(0,Math.min(1,v)), ease=v=>v<.5?2*v*v:1-Math.pow(-2*v+2,2)/2;
 function tick(){
   prev={x:st.x,y:st.y}; const k0=st.keys, m0=st.m, pk=st.peak;
-  const dir=(held.R?1:0)-(held.L?1:0);
-  step(world,st,{dir,jump:held.J||jumpLatch}); jumpLatch=false;
+  const dir=(held.R?1:0)-(held.L?1:0), v=(held.D?1:0)-(held.U?1:0);
+  // ylös-näppäin hyppää, jos lähellä ei ole tikkaita (tietokoneella nuoli ylös on myös hyppy)
+  const upJump = v<0 && st.m!==4 && !canClimb(world,st,-1) && upEdge;
+  step(world,st,{dir,v,jump:held.J||jumpLatch||upJump}); jumpLatch=false; upEdge=false;
   if(m0!==0 && m0!==3 && st.m===0){ landAt=frame; landHard=Math.min(1,(st.y-pk)/MAXFALL); }
   if(m0!==3 && st.m===3){ splashAt=frame; splashX=st.x; splashY=Math.floor((st.y-1)/U); }
   if((m0===0||m0===3) && st.m===1){ jumpAt=frame; }
   if(st.keys!==k0) updateKeys();
   if(st.dead){ mode='dead'; deadT=0; toast(T('cause.'+(st.cause||'x'))); }
-  else if(st.won){ mode='exiting'; exitT=0; held.L=held.R=held.J=false; if(!TEST && !def.custom && li+1>progress) progress=li+1; persist(); updateTray(); }
+  else if(st.won){ mode='exiting'; exitT=0; held.L=held.R=held.J=held.U=held.D=false; if(!TEST && !def.custom && li+1>progress) progress=li+1; persist(); updateTray(); }
 }
 function loop(now){
   const dt=Math.min(200,now-last); last=now; frame+=dt;
@@ -368,7 +378,7 @@ function drawTiles(mine){
         mud: mudAt(world,st.t,i), wet: (waterAt(world,st.t)[i]&4) && i>=COLS && wetAt(world,st.t,i-COLS) ? .8 : 0}); }
     else if(t===WALL) A.stone(ctx,x,y,ts,r);
     else if(t===WOOD) A.wood(ctx,x,y,ts,{char:charOf(i)});
-    else if(t===FENCE) A.fence(ctx,x,y,ts,{char:charOf(i), top: gAt(r-1,c)!==FENCE || gone(i-COLS)});
+    else if(t===LADDER) A.ladder(ctx,x,y,ts,{char:charOf(i), top: gAt(r-1,c)!==LADDER || gone(i-COLS)});
     else if(t===SPIKE) A.spike(ctx,x,y,ts);
     else if(t===EXIT) drawDoor(r,c);
   }
@@ -422,6 +432,9 @@ function drawPlayer(px,py){
   ctx.fillRect(x+w*.28-(stp?w*.06:0)-bend, y-lh, lw, lh); ctx.fillRect(x+w*.56+(stp?w*.06:0)+bend, y-lh, lw, lh);
   ctx.fillStyle=C.lingon; rr(x+w*.18,y-h*.62,w*.64,h*.47,w*.18); ctx.fill();
   ctx.fillStyle='rgba(255,255,255,.25)'; ctx.fillRect(x+w*.3,y-h*.5,w*.4,h*.05);
+  if(st.m===4){ // kiipeää: kädet vuorotellen ylhäällä askelmilla
+    const ph=Math.floor(st.y/2)%2; ctx.strokeStyle=C.lingon; ctx.lineWidth=w*.12; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(x+w*.25,y-h*.55); ctx.lineTo(x+w*.12,y-h*(ph?.98:.82)); ctx.moveTo(x+w*.75,y-h*.55); ctx.lineTo(x+w*.88,y-h*(ph?.82:.98)); ctx.stroke(); }
   if(swim){ // kädet melovat
     ctx.strokeStyle=C.lingon; ctx.lineWidth=w*.12; ctx.lineCap='round'; const a=Math.sin(frame/(moving?140:400))*w*.12;
     ctx.beginPath(); ctx.moveTo(x+w*.25,y-h*.45); ctx.lineTo(x+w*.02,y-h*.38+a); ctx.moveTo(x+w*.75,y-h*.45); ctx.lineTo(x+w*.98,y-h*.38-a); ctx.stroke(); }
@@ -436,7 +449,7 @@ function drawPlayer(px,py){
 function drawWater(alpha){
   const wa=waterRawAt(world,st.t);
   const wet=(r,c)=> r>=0&&r<ROWS&&c>=0&&c<COLS&&(wa[r*COLS+c]&1);
-  const solidNow=(r,c)=>{ if(r<0||r>=ROWS||c<0||c>=COLS) return true; const i=r*COLS+c, t=world.g[i]; return (t===EARTH||t===WALL||t===WOOD||t===FENCE)&&!gone(i); };
+  const solidNow=(r,c)=>{ if(r<0||r>=ROWS||c<0||c>=COLS) return true; const i=r*COLS+c, t=world.g[i]; return (t===EARTH||t===WALL||t===WOOD)&&!gone(i); };
   for(let i=0;i<wa.length;i++){ const v=wa[i]; if(!(v&10) || (v&1)) continue;
     const x=(i%COLS)*ts, y=((i/COLS)|0)*ts;
     if(v&2) A.stream(ctx,x,y,ts,{v:true,frame,alpha});
@@ -465,7 +478,7 @@ function drawFire(){
     const g0=world.ign[i]; if(g0<0 || st.t<g0 || st.t>=g0+BURN) continue;
     const r=(i/COLS)|0, c=i%COLS, t=world.g[i], p=(st.t-g0)/BURN;
     const k = Math.min(1,(st.t-g0+1)/5) * (p>.8? (1-p)/.2*.8+.2 : 1);
-    const yy = t===WOOD? r*ts-ts*.72 : t===FENCE? r*ts : r*ts-ts*.1;
+    const yy = t===WOOD? r*ts-ts*.72 : t===LADDER? r*ts : r*ts-ts*.1;
     A.flame(ctx,c*ts,yy,ts,frame,A.hash(r,c),k);
   }
 }
